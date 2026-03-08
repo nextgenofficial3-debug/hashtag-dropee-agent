@@ -1,0 +1,10 @@
+{
+  "appId": "app.lovable.b6434f7ac9064c679a6f087089402986",
+  "appName": "A Lovable project",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://b6434f7a-c906-4c67-9a6f-087089402986.lovableproject.com?forceHideBadge=true",
+    "cleartext": true
+  }
+}
