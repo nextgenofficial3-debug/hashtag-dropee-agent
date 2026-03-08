@@ -1,14 +1,16 @@
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { 
-  CheckCircle2, DollarSign, Star, MapPin, ArrowRight, 
+  CheckCircle2, DollarSign, Star, MapPin, 
   Package, TrendingUp, User, Zap 
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 import AvailabilityToggle from "@/components/dashboard/AvailabilityToggle";
 import ActiveDeliveryCard from "@/components/dashboard/ActiveDeliveryCard";
 import IncomingOrderBanner from "@/components/dashboard/IncomingOrderBanner";
+import { useHubOrders } from "@/hooks/useHubOrders";
 
 const container = {
   hidden: { opacity: 0 },
@@ -19,17 +21,17 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
 };
 
-// Mock data for demo
-const mockStats = { deliveries: 8, earnings: 124.50, rating: 4.8 };
-const mockRecentOrders = [
-  { id: "ORD-1042", status: "delivered", address: "12 Osu Oxford St", fee: 18.50, time: "2h ago" },
-  { id: "ORD-1041", status: "delivered", address: "5 Cantonments Rd", fee: 22.00, time: "4h ago" },
-  { id: "ORD-1040", status: "cancelled", address: "8 Dzorwulu Ave", fee: 0, time: "5h ago" },
-];
-
 export default function DashboardPage() {
   const [status, setStatus] = useState<"online" | "offline" | "busy">("offline");
-  const agentName = "Kwame";
+  const { agent } = useAuth();
+  const { orders, hubConnected } = useHubOrders();
+  const agentName = agent?.full_name?.split(" ")[0] || "Agent";
+
+  const todayDeliveries = orders.filter((o) => o.status === "delivered").length;
+  const todayEarnings = orders.filter((o) => o.status === "delivered").reduce((s, o) => s + o.fee, 0);
+  const activeOrders = orders.filter(
+    (o) => o.status === "assigned" || o.status === "picked_up" || o.status === "on_the_way"
+  );
 
   const greeting = () => {
     const h = new Date().getHours();
@@ -45,7 +47,6 @@ export default function DashboardPage() {
       animate="show"
       className="px-4 py-4 space-y-5"
     >
-      {/* Incoming order banner (shows when there's a new order) */}
       <IncomingOrderBanner />
 
       {/* Hero */}
@@ -56,21 +57,33 @@ export default function DashboardPage() {
         <div className="flex-1">
           <p className="text-muted-foreground text-sm">{greeting()}</p>
           <h1 className="text-xl font-bold text-foreground">{agentName} 👋</h1>
+          {agent?.agent_code && (
+            <p className="text-xs text-muted-foreground">ID: {agent.agent_code}</p>
+          )}
         </div>
         <AvailabilityToggle status={status} onStatusChange={setStatus} />
       </motion.div>
 
+      {/* Connection Status */}
+      {!hubConnected && (
+        <motion.div variants={item} className="bg-accent/10 border border-accent/30 rounded-xl p-3 flex items-center gap-2">
+          <span className="text-xs text-accent font-medium">⚠ Hub not connected — showing cached orders</span>
+        </motion.div>
+      )}
+
       {/* Stats */}
       <motion.div variants={item} className="grid grid-cols-3 gap-3">
-        <StatsCard icon={CheckCircle2} label="Deliveries" value={mockStats.deliveries} color="primary" />
-        <StatsCard icon={DollarSign} label="Earnings" value={`₵${mockStats.earnings}`} color="accent" />
-        <StatsCard icon={Star} label="Rating" value={mockStats.rating} color="warning" />
+        <StatsCard icon={CheckCircle2} label="Deliveries" value={todayDeliveries} color="primary" />
+        <StatsCard icon={DollarSign} label="Earnings" value={`₵${todayEarnings.toFixed(0)}`} color="accent" />
+        <StatsCard icon={Star} label="Rating" value={agent?.average_rating || 0} color="warning" />
       </motion.div>
 
       {/* Active Delivery */}
-      <motion.div variants={item}>
-        <ActiveDeliveryCard />
-      </motion.div>
+      {activeOrders.length > 0 && (
+        <motion.div variants={item}>
+          <ActiveDeliveryCard />
+        </motion.div>
+      )}
 
       {/* Quick Actions */}
       <motion.div variants={item}>
@@ -98,10 +111,10 @@ export default function DashboardPage() {
           </Link>
         </div>
         <div className="space-y-2">
-          {mockRecentOrders.map((order) => (
+          {orders.slice(0, 5).map((order) => (
             <Link
               key={order.id}
-              to={`/agent/orders/${order.id}`}
+              to="/agent/orders"
               className="glass rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform"
             >
               <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center">
@@ -109,28 +122,34 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-foreground">{order.id}</span>
+                  <span className="text-sm font-medium text-foreground">{order.customerName}</span>
                   <span
                     className={cn(
                       "text-[10px] font-semibold px-1.5 py-0.5 rounded-full",
                       order.status === "delivered"
                         ? "bg-primary/15 text-primary"
-                        : "bg-destructive/15 text-destructive"
+                        : order.status === "cancelled"
+                        ? "bg-destructive/15 text-destructive"
+                        : "bg-accent/15 text-accent"
                     )}
                   >
-                    {order.status}
+                    {order.status.replace("_", " ")}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground truncate">{order.address}</p>
+                <p className="text-xs text-muted-foreground truncate">{order.deliveryAddress}</p>
               </div>
               <div className="text-right shrink-0">
                 {order.fee > 0 && (
                   <p className="text-sm font-semibold text-accent">₵{order.fee.toFixed(2)}</p>
                 )}
-                <p className="text-[10px] text-muted-foreground">{order.time}</p>
               </div>
             </Link>
           ))}
+          {orders.length === 0 && (
+            <div className="glass rounded-xl p-6 text-center">
+              <p className="text-sm text-muted-foreground">No orders yet</p>
+            </div>
+          )}
         </div>
       </motion.div>
     </motion.div>
