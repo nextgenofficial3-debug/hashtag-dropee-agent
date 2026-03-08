@@ -1,0 +1,17 @@
+{
+  "name": "DeliverPro Agent",
+  "short_name": "DeliverPro",
+  "description": "Delivery agent app for managing orders, deliveries, and earnings",
+  "start_url": "/agent/dashboard",
+  "display": "standalone",
+  "background_color": "#0A0A0F",
+  "theme_color": "#00C851",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
