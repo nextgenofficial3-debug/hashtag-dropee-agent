@@ -87,8 +87,15 @@ class HubService {
       this.ws.onopen = () => {
         this.connected = true;
         this.reconnectAttempts = 0;
-        // Send current availability status to hub on connect
-        this.sendAvailability(this._currentStatus);
+        console.log("[HubService] WebSocket connected");
+        // Send any pending status immediately
+        if (this._pendingStatus !== null) {
+          this._flushStatus(this._pendingStatus);
+          this._pendingStatus = null;
+        } else {
+          // Send current availability status to hub on connect
+          this._flushStatus(this._currentStatus);
+        }
       };
 
       this.ws.onmessage = (event) => {
