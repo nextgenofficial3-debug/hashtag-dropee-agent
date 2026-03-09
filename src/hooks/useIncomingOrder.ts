@@ -85,7 +85,7 @@ export function useIncomingOrder() {
   useEffect(() => {
     if (!agent) return;
 
-    const unsubscribe = hubService.onOrdersUpdate((orders) => {
+    const unsubscribe = hubService.onOrdersUpdate((orders: HubOrder[]) => {
       // Check for newly assigned orders
       const newAssigned = orders.find(
         (o) => o.status === "assigned" && o.agentId === agent.agent_code
