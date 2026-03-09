@@ -5,7 +5,7 @@ import {
   Package, TrendingUp, User, Zap 
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useAgentAvailability } from "@/hooks/useAgentAvailability";
 import { useAuth } from "@/contexts/AuthContext";
 import AvailabilityToggle from "@/components/dashboard/AvailabilityToggle";
 import ActiveDeliveryCard from "@/components/dashboard/ActiveDeliveryCard";
