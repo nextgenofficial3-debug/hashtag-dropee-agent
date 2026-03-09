@@ -10,7 +10,7 @@ import OrderDetailSheet from "@/components/orders/OrderDetailSheet";
 type Tab = "active" | "completed";
 
 export default function OrdersPage() {
-  const { orders, hubConnected, updateStatus } = useHubOrders();
+  const { orders, updateStatus } = useHubOrders();
   const [activeTab, setActiveTab] = useState<Tab>("active");
   const [selectedOrder, setSelectedOrder] = useState<HubOrder | null>(null);
   const { toast } = useToast();
