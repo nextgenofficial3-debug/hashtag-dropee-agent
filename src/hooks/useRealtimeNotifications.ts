@@ -124,12 +124,13 @@ export function useRealtimeNotifications() {
 function firePushNotification(title: string, body: string) {
   if ("Notification" in window && Notification.permission === "granted") {
     try {
-      new Notification(title, {
+      const options: any = {
         body,
         icon: "/icon-192.png",
         badge: "/icon-192.png",
         vibrate: [200, 100, 200],
-      });
+      };
+      new Notification(title, options);
     } catch {
       // SW notification fallback
       navigator.serviceWorker?.ready.then((reg) => {
