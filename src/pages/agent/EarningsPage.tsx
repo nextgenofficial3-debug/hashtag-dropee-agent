@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Package, Calendar, DollarSign, Star } from "lucide-react";
+import { Package, Calendar, DollarSign, Star, CreditCard, CheckCircle2 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { subDays, subWeeks, startOfWeek, endOfWeek, format } from "date-fns";
+import { subDays, subWeeks, startOfWeek, endOfWeek, format, formatDistanceToNow } from "date-fns";
 
 type Period = "daily" | "weekly" | "monthly";
 
