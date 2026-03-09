@@ -41,6 +41,8 @@ class HubService {
   private connecting = false;
   private connected = false;
   private _currentStatus: "online" | "offline" | "busy" = "offline";
+  private _pendingStatus: "online" | "offline" | "busy" | null = null;
+  private _statusRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
   get isConnected() {
     return this.connected;
