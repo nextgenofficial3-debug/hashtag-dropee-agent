@@ -7,7 +7,7 @@ export function useHubConnection() {
   useEffect(() => {
     setHubConnected(hubService.isConnected);
     const unsub = hubService.onConnectionChange(setHubConnected);
-    return unsub;
+    return () => { unsub(); };
   }, []);
 
   return hubConnected;
