@@ -12,13 +12,15 @@ import { subDays, subWeeks, startOfWeek, endOfWeek, format, formatDistanceToNow 
 type Period = "daily" | "weekly" | "monthly";
 
 export default function EarningsPage() {
-  const { agent } = useAuth();
+  const { agent, user } = useAuth();
   const [period, setPeriod] = useState<Period>("daily");
   const [deliveredOrders, setDeliveredOrders] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"earnings" | "payments">("earnings");
 
   useEffect(() => {
     if (!agent) return;
-    const fetch = async () => {
+    const fetchOrders = async () => {
       const { data } = await supabase
         .from("delivery_orders")
         .select("*")
@@ -27,8 +29,23 @@ export default function EarningsPage() {
         .order("updated_at", { ascending: false });
       if (data) setDeliveredOrders(data);
     };
-    fetch();
+    fetchOrders();
   }, [agent]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchPayments = async () => {
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("type", "earnings")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (data) setPayments(data);
+    };
+    fetchPayments();
+  }, [user]);
 
   const lifetime = deliveredOrders.reduce((s, o) => s + (o.total_fee || 0), 0);
 
