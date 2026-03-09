@@ -177,9 +177,12 @@ class HubService {
   disconnect() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+    if (this._statusRetryTimer) clearTimeout(this._statusRetryTimer);
+    this._statusRetryTimer = null;
+    this._pendingStatus = null;
     this.reconnectAttempts = this.maxReconnectAttempts; // prevent reconnect
     // Notify hub we're going offline before disconnecting
-    this.sendAvailability("offline");
+    this._flushStatus("offline");
     this.ws?.close();
     this.ws = null;
     this.connected = false;
