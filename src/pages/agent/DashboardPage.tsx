@@ -5,7 +5,7 @@ import {
   Package, TrendingUp, User, Zap 
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useAgentAvailability } from "@/hooks/useAgentAvailability";
 import { useAuth } from "@/contexts/AuthContext";
 import AvailabilityToggle from "@/components/dashboard/AvailabilityToggle";
 import ActiveDeliveryCard from "@/components/dashboard/ActiveDeliveryCard";
@@ -22,7 +22,7 @@ const item = {
 };
 
 export default function DashboardPage() {
-  const [status, setStatus] = useState<"online" | "offline" | "busy">("offline");
+  const { status, changeStatus } = useAgentAvailability();
   const { agent } = useAuth();
   const { orders, hubConnected } = useHubOrders();
   const agentName = agent?.full_name?.split(" ")[0] || "Agent";
@@ -61,7 +61,7 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">ID: {agent.agent_code}</p>
           )}
         </div>
-        <AvailabilityToggle status={status} onStatusChange={setStatus} />
+        <AvailabilityToggle status={status} onStatusChange={changeStatus} />
       </motion.div>
 
 
@@ -91,7 +91,7 @@ export default function DashboardPage() {
             icon={Zap}
             label="Go Online"
             highlight={status === "offline"}
-            onClick={() => setStatus("online")}
+            onClick={() => changeStatus("online")}
           />
         </div>
       </motion.div>
