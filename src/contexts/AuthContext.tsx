@@ -15,6 +15,7 @@ interface AgentProfile {
   total_earnings: number;
   average_rating: number;
   is_verified: boolean;
+  created_at: string;
 }
 
 interface AuthContextType {
