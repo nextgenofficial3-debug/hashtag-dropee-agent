@@ -177,7 +177,6 @@ class HubService {
 
     // WS not open — queue for when it opens + retry after 2s
     this._pendingStatus = status;
-    console.log("[HubService] WS not open, queued status:", status);
     this._statusRetryTimer = setTimeout(() => {
       if (this._pendingStatus !== null) {
         if (this._flushStatus(this._pendingStatus)) {
