@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { 
   CheckCircle2, DollarSign, Star, MapPin, 
-  Package, TrendingUp, User, Zap 
+  Package, TrendingUp, User, Zap, PlusCircle, History 
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAgentAvailability } from "@/hooks/useAgentAvailability";
