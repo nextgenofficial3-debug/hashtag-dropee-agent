@@ -30,6 +30,22 @@ export default function ReceiptPage() {
     }
   };
 
+  const handleWhatsAppShare = () => {
+    const cleanPhone = order.customerPhone?.replace(/[^0-9+]/g, "").replace("+", "") || "";
+    const msg = encodeURIComponent(
+      `📦 *DeliverPro Receipt*\n\n` +
+      `Order: ${order.hubOrderId}\n` +
+      `Customer: ${order.customerName}\n` +
+      `Delivered to: ${order.deliveryAddress}\n` +
+      `Total: ₵${order.total.toFixed(2)}\n` +
+      `Fee: ₵${order.fee.toFixed(2)}\n` +
+      `Grand Total: ₵${(order.total + order.fee).toFixed(2)}\n` +
+      `Date: ${format(new Date(order.createdAt), "dd MMM yyyy, hh:mm a")}\n\n` +
+      `Thank you for choosing DeliverPro! 🚀`
+    );
+    window.open(`https://wa.me/${cleanPhone}?text=${msg}`, "_blank");
+  };
+
   return (
     <div className="px-4 py-4 space-y-4">
       {/* Header - hidden on print */}
