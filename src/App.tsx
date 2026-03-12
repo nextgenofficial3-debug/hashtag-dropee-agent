@@ -15,6 +15,9 @@ import NotificationsPage from "@/pages/agent/NotificationsPage";
 import ReceiptPage from "@/pages/agent/ReceiptPage";
 import NewOrderPage from "@/pages/agent/NewOrderPage";
 import DeliveryHistoryPage from "@/pages/agent/DeliveryHistoryPage";
+import CustomersPage from "@/pages/agent/CustomersPage";
+import VendorsPage from "@/pages/agent/VendorsPage";
+import ExternalOrdersPage from "@/pages/agent/ExternalOrdersPage";
 import LoginPage from "@/pages/auth/LoginPage";
 import InstallPage from "@/pages/InstallPage";
 import NotFound from "./pages/NotFound";
@@ -71,6 +74,9 @@ const App = () => (
               <Route path="receipt/:orderId" element={<ReceiptPage />} />
               <Route path="new-order" element={<NewOrderPage />} />
               <Route path="history" element={<DeliveryHistoryPage />} />
+              <Route path="customers" element={<CustomersPage />} />
+              <Route path="vendors" element={<VendorsPage />} />
+              <Route path="external-orders" element={<ExternalOrdersPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

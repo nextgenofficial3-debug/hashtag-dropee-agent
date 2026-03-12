@@ -97,6 +97,54 @@ export type Database = {
           },
         ]
       }
+      customers: {
+        Row: {
+          address: string | null
+          agent_user_id: string
+          created_at: string
+          email: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          notes: string | null
+          phone: string | null
+          plus_code: string | null
+          total_orders: number | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          agent_user_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          plus_code?: string | null
+          total_orders?: number | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          agent_user_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          plus_code?: string | null
+          total_orders?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       delivery_agents: {
         Row: {
           agent_code: string
@@ -371,6 +419,36 @@ export type Database = {
           },
         ]
       }
+      partner_api_keys: {
+        Row: {
+          api_key: string
+          callback_url: string | null
+          created_at: string | null
+          hmac_secret: string | null
+          id: string
+          is_active: boolean | null
+          partner_name: string
+        }
+        Insert: {
+          api_key: string
+          callback_url?: string | null
+          created_at?: string | null
+          hmac_secret?: string | null
+          id?: string
+          is_active?: boolean | null
+          partner_name: string
+        }
+        Update: {
+          api_key?: string
+          callback_url?: string | null
+          created_at?: string | null
+          hmac_secret?: string | null
+          id?: string
+          is_active?: boolean | null
+          partner_name?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -389,6 +467,54 @@ export type Database = {
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      vendors: {
+        Row: {
+          address: string | null
+          agent_user_id: string
+          contact_person: string | null
+          created_at: string
+          email: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          notes: string | null
+          phone: string | null
+          total_orders: number | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          agent_user_id: string
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          total_orders?: number | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          agent_user_id?: string
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          total_orders?: number | null
+          updated_at?: string
         }
         Relationships: []
       }
