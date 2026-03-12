@@ -371,6 +371,36 @@ export type Database = {
           },
         ]
       }
+      partner_api_keys: {
+        Row: {
+          api_key: string
+          callback_url: string | null
+          created_at: string | null
+          hmac_secret: string | null
+          id: string
+          is_active: boolean | null
+          partner_name: string
+        }
+        Insert: {
+          api_key: string
+          callback_url?: string | null
+          created_at?: string | null
+          hmac_secret?: string | null
+          id?: string
+          is_active?: boolean | null
+          partner_name: string
+        }
+        Update: {
+          api_key?: string
+          callback_url?: string | null
+          created_at?: string | null
+          hmac_secret?: string | null
+          id?: string
+          is_active?: boolean | null
+          partner_name?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
