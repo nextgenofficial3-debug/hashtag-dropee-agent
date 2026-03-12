@@ -90,8 +90,14 @@ export default function DashboardPage() {
         <div className="grid grid-cols-4 gap-2">
           <QuickAction to="/agent/new-order" icon={PlusCircle} label="New Order" highlight />
           <QuickAction to="/agent/orders" icon={Package} label="Orders" />
+          <QuickAction to="/agent/customers" icon={Users} label="Customers" />
+          <QuickAction to="/agent/vendors" icon={Store} label="Vendors" />
+        </div>
+        <div className="grid grid-cols-4 gap-2 mt-2">
+          <QuickAction to="/agent/external-orders" icon={ExternalLink} label="Ext Orders" />
           <QuickAction to="/agent/history" icon={History} label="History" />
           <QuickAction to="/agent/earnings" icon={TrendingUp} label="Earnings" />
+          <QuickAction to="/agent/profile" icon={User} label="Profile" />
         </div>
       </motion.div>
 

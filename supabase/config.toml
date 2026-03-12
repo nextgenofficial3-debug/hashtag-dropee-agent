@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.partner-api]
 verify_jwt = false
+
+[functions.fetch-external-orders]
+verify_jwt = false

@@ -74,6 +74,9 @@ const App = () => (
               <Route path="receipt/:orderId" element={<ReceiptPage />} />
               <Route path="new-order" element={<NewOrderPage />} />
               <Route path="history" element={<DeliveryHistoryPage />} />
+              <Route path="customers" element={<CustomersPage />} />
+              <Route path="vendors" element={<VendorsPage />} />
+              <Route path="external-orders" element={<ExternalOrdersPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
