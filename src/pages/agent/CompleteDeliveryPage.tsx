@@ -24,29 +24,29 @@ export default function CompleteDeliveryPage() {
     (o) => o.status === "on_the_way" || o.status === "picked_up"
   );
 
-  // Fetch local order for fee breakdown
+  // Fetch the order details from the shared orders table for fee breakdown
   useEffect(() => {
     if (!order || !agent) return;
     const fetchLocal = async () => {
       const { data } = await supabase
-        .from("delivery_orders")
+        .from("orders")
         .select("*")
-        .eq("order_code", order.hubOrderId)
+        .eq("id", order.id)
         .maybeSingle();
       if (data) setLocalOrder(data);
     };
     fetchLocal();
-  }, [order?.hubOrderId, agent]);
+  }, [order?.id, agent]);
 
   const fees = {
-    base: localOrder?.base_fee || 0,
-    distance: localOrder?.distance_surcharge || 0,
-    weight: localOrder?.weight_surcharge || 0,
-    fragility: localOrder?.fragility_surcharge || 0,
-    weather: localOrder?.weather_adjustment || 0,
-    urgency: localOrder?.urgency_bonus || 0,
+    base: 0,
+    distance: 0,
+    weight: 0,
+    fragility: 0,
+    weather: 0,
+    urgency: 0,
   };
-  const total = localOrder?.total_fee || order?.fee || 0;
+  const total = localOrder?.fee ?? localOrder?.total ?? order?.fee ?? 0;
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,16 +79,21 @@ export default function CompleteDeliveryPage() {
         photoUrl = supabase.storage.from("delivery-proofs").getPublicUrl(uploadData.path).data.publicUrl;
       }
 
-      // Update local order with proof
-      if (localOrder && photoUrl) {
+      // Update shared orders table with proof photo + delivered status
+      if (photoUrl) {
         await supabase
-          .from("delivery_orders")
-          .update({ proof_photo_url: photoUrl, status: "delivered" as any })
-          .eq("id", localOrder.id);
+          .from("orders")
+          .update({ proof_photo_url: photoUrl, status: "delivered", updated_at: new Date().toISOString() } as any)
+          .eq("id", order.id);
+      } else {
+        await supabase
+          .from("orders")
+          .update({ status: "delivered", updated_at: new Date().toISOString() } as any)
+          .eq("id", order.id);
       }
 
-      // Update hub status
-      const { success, error } = await updateStatus(order.hubOrderId, "delivered");
+      // Also update via updateStatus for timeline logging
+      const { success, error } = await updateStatus(order.id, "delivered");
       if (!success) {
         toast({ title: "Status update failed", description: error, variant: "destructive" });
         setSubmitting(false);

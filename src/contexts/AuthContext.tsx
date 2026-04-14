@@ -23,8 +23,8 @@ interface AuthContextType {
   session: Session | null;
   agent: AgentProfile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUp: (email: string, password: string, fullName: string, agentCode: string) => Promise<{ error: Error | null }>;
+  isAgent: boolean;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -34,9 +34,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [agent, setAgent] = useState<AgentProfile | null>(null);
+  const [isAgent, setIsAgent] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const fetchAgent = async (userId: string) => {
+  const fetchAgentProfile = async (userId: string) => {
     const { data } = await supabase
       .from("delivery_agents")
       .select("*")
@@ -45,25 +46,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAgent(data as AgentProfile | null);
   };
 
+  const checkAgentRole = async (userId: string): Promise<boolean> => {
+    const { data } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "agent")
+      .maybeSingle();
+    return !!data;
+  };
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          setTimeout(() => fetchAgent(session.user.id), 0);
+          const agentRole = await checkAgentRole(session.user.id);
+          setIsAgent(agentRole);
+          if (agentRole) {
+            setTimeout(() => fetchAgentProfile(session.user!.id), 0);
+          } else {
+            setAgent(null);
+          }
         } else {
+          setIsAgent(false);
           setAgent(null);
         }
         setLoading(false);
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchAgent(session.user.id);
+        const agentRole = await checkAgentRole(session.user.id);
+        setIsAgent(agentRole);
+        if (agentRole) {
+          fetchAgentProfile(session.user.id);
+        }
       }
       setLoading(false);
     });
@@ -71,46 +93,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
-  };
-
-  const signUp = async (email: string, password: string, fullName: string, agentCode: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.origin },
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     });
-    if (error) return { error: error as Error };
-
-    // Create agent profile
-    if (data.user) {
-      const { error: agentError } = await supabase.from("delivery_agents").insert({
-        user_id: data.user.id,
-        full_name: fullName,
-        agent_code: agentCode,
-      });
-      if (agentError) return { error: agentError as unknown as Error };
-
-      // Assign agent role
-      const { error: roleError } = await supabase.from("user_roles").insert({
-        user_id: data.user.id,
-        role: "agent",
-      });
-      if (roleError) return { error: roleError as unknown as Error };
-    }
-
-    return { error: null };
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
     setAgent(null);
+    setIsAgent(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, agent, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, agent, loading, isAgent, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );

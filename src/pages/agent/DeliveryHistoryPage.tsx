@@ -9,20 +9,18 @@ import { useNavigate } from "react-router-dom";
 
 interface DeliveryRecord {
   id: string;
-  order_code: string;
+  hub_order_id: string | null;
   customer_name: string;
   customer_phone: string | null;
-  pickup_address: string;
-  delivery_address: string;
-  total_fee: number | null;
+  pickup_address: string | null;
+  customer_address: string;
+  fee: number | null;
   proof_photo_url: string | null;
   status: string;
-  updated_at: string;
+  updated_at: string | null;
   created_at: string;
   special_instructions: string | null;
-  base_fee: number | null;
-  distance_surcharge: number | null;
-  weight_surcharge: number | null;
+  total: number;
 }
 
 export default function DeliveryHistoryPage() {
@@ -37,7 +35,7 @@ export default function DeliveryHistoryPage() {
     if (!agent) return;
     const fetch = async () => {
       const { data } = await supabase
-        .from("delivery_orders")
+        .from("orders")
         .select("*")
         .eq("agent_user_id", agent.user_id)
         .eq("status", "delivered")
@@ -51,8 +49,8 @@ export default function DeliveryHistoryPage() {
   const filtered = deliveries.filter(
     (d) =>
       d.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      d.order_code.toLowerCase().includes(search.toLowerCase()) ||
-      d.delivery_address.toLowerCase().includes(search.toLowerCase())
+      (d.hub_order_id || "").toLowerCase().includes(search.toLowerCase()) ||
+      d.customer_address.toLowerCase().includes(search.toLowerCase())
   );
 
   const selected = selectedId ? deliveries.find((d) => d.id === selectedId) : null;
@@ -61,11 +59,11 @@ export default function DeliveryHistoryPage() {
     const phone = d.customer_phone?.replace(/[^0-9+]/g, "").replace("+", "") || "";
     const msg = encodeURIComponent(
       `📦 *DeliverPro Receipt*\n\n` +
-      `Order: ${d.order_code}\n` +
+      `Order: ${d.hub_order_id || d.id}\n` +
       `Customer: ${d.customer_name}\n` +
-      `Delivered to: ${d.delivery_address}\n` +
-      `Fee: ₵${(d.total_fee || 0).toFixed(2)}\n` +
-      `Date: ${format(new Date(d.updated_at), "dd MMM yyyy, hh:mm a")}\n\n` +
+      `Delivered to: ${d.customer_address}\n` +
+      `Fee: ₵${(d.fee || 0).toFixed(2)}\n` +
+      `Date: ${format(new Date(d.updated_at || d.created_at), "dd MMM yyyy, hh:mm a")}\n\n` +
       `Thank you for choosing DeliverPro! 🚀`
     );
     window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
@@ -111,12 +109,12 @@ export default function DeliveryHistoryPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-bold text-foreground">{d.customer_name}</p>
-                    <p className="text-[10px] text-muted-foreground">{d.order_code} · {format(new Date(d.updated_at), "dd MMM yyyy")}</p>
+                    <p className="text-[10px] text-muted-foreground">{d.hub_order_id || d.id} · {format(new Date(d.updated_at || d.created_at), "dd MMM yyyy")}</p>
                   </div>
-                  <span className="text-sm font-bold text-accent">₵{(d.total_fee || 0).toFixed(2)}</span>
+                  <span className="text-sm font-bold text-accent">₵{(d.fee || 0).toFixed(2)}</span>
                 </div>
 
-                <p className="text-xs text-muted-foreground truncate">{d.delivery_address}</p>
+                <p className="text-xs text-muted-foreground truncate">{d.customer_address}</p>
 
                 {/* Proof Photo Thumbnail */}
                 {d.proof_photo_url && (
@@ -137,7 +135,7 @@ export default function DeliveryHistoryPage() {
                     <Eye className="w-3.5 h-3.5" /> Details
                   </button>
                   <button
-                    onClick={() => navigate(`/agent/receipt/${d.order_code}`)}
+                    onClick={() => navigate(`/agent/receipt/${d.hub_order_id || d.id}`)}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary/10 text-primary text-xs font-bold active:scale-95 transition-transform"
                   >
                     <Receipt className="w-3.5 h-3.5" /> Receipt
@@ -161,11 +159,11 @@ export default function DeliveryHistoryPage() {
                       exit={{ opacity: 0, height: 0 }}
                       className="space-y-2 border-t border-border pt-3"
                     >
-                      <DetailRow label="Pickup" value={d.pickup_address} />
-                      <DetailRow label="Delivery" value={d.delivery_address} />
+                      <DetailRow label="Pickup" value={d.pickup_address || "N/A"} />
+                      <DetailRow label="Delivery" value={d.customer_address} />
                       <DetailRow label="Phone" value={d.customer_phone || "N/A"} />
                       <DetailRow label="Created" value={format(new Date(d.created_at), "dd MMM yyyy, hh:mm a")} />
-                      <DetailRow label="Completed" value={format(new Date(d.updated_at), "dd MMM yyyy, hh:mm a")} />
+                      <DetailRow label="Completed" value={format(new Date(d.updated_at || d.created_at), "dd MMM yyyy, hh:mm a")} />
                       {d.special_instructions && <DetailRow label="Notes" value={d.special_instructions} />}
 
                       {d.proof_photo_url && (

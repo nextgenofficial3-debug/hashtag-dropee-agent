@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { HubOrder } from "@/services/hubService";
-import { hubService } from "@/services/hubService";
+import { mapOrderRow } from "@/services/hubService";
+import { updateOrderStatus } from "@/services/hubService";
 
 export interface IncomingOrder {
   order: HubOrder;
@@ -10,16 +11,15 @@ export interface IncomingOrder {
 }
 
 /**
- * Listens for new order assignments via:
- * 1. Hub WebSocket (new_order event)
- * 2. Supabase realtime INSERT on delivery_orders for this agent
- * Fires browser push notification + provides accept/reject.
+ * Listens for new order assignments via Supabase Realtime (INSERT + UPDATE)
+ * on the shared `orders` table, scoped to this agent's user_id.
+ * Fires browser notification + provides accept/reject callbacks.
  */
 export function useIncomingOrder() {
   const { agent, user } = useAuth();
   const [incoming, setIncoming] = useState<IncomingOrder | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const seenOrderIds = useRef<Set<string>>(new Set());
 
   // Request notification permission on mount
   useEffect(() => {
@@ -45,25 +45,23 @@ export function useIncomingOrder() {
 
   const playSound = useCallback(() => {
     try {
-      if (!audioRef.current) {
-        // Use a simple oscillator beep
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.value = 880;
-        gain.gain.value = 0.3;
-        osc.start();
-        setTimeout(() => { osc.stop(); ctx.close(); }, 300);
-      }
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      gain.gain.value = 0.3;
+      osc.start();
+      setTimeout(() => { osc.stop(); ctx.close(); }, 300);
     } catch { /* silent */ }
   }, []);
 
   const startCountdown = useCallback((order: HubOrder) => {
-    // Clear any existing countdown
-    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (seenOrderIds.current.has(order.id)) return;
+    seenOrderIds.current.add(order.id);
 
+    if (countdownRef.current) clearInterval(countdownRef.current);
     setIncoming({ order, countdown: 30 });
     showPushNotification(order);
     playSound();
@@ -74,66 +72,52 @@ export function useIncomingOrder() {
         if (prev.countdown <= 1) {
           clearInterval(countdownRef.current!);
           countdownRef.current = null;
-          return null; // Auto-reject on timeout
+          return null; // Auto-dismiss on timeout
         }
         return { ...prev, countdown: prev.countdown - 1 };
       });
     }, 1000);
   }, [showPushNotification, playSound]);
 
-  // Listen to hub WebSocket for new_order events
-  useEffect(() => {
-    if (!agent) return;
-
-    const unsubscribe = hubService.onOrdersUpdate((orders: HubOrder[]) => {
-      // Check for newly assigned orders
-      const newAssigned = orders.find(
-        (o) => o.status === "assigned" && o.agentId === agent.agent_code
-      );
-      if (newAssigned && (!incoming || incoming.order.hubOrderId !== newAssigned.hubOrderId)) {
-        startCountdown(newAssigned);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [agent, startCountdown, incoming]);
-
-  // Listen to Supabase realtime for new delivery_orders assigned to this agent
+  // Listen to Supabase realtime for INSERT on orders assigned to this agent
   useEffect(() => {
     if (!user) return;
 
     const channel = supabase
-      .channel("incoming-orders")
+      .channel(`incoming-orders-${user.id}`)
       .on(
         "postgres_changes",
         {
           event: "INSERT",
           schema: "public",
-          table: "delivery_orders",
+          table: "orders",
           filter: `agent_user_id=eq.${user.id}`,
         },
         (payload) => {
           const row = payload.new as any;
-          const order: HubOrder = {
-            id: row.id,
-            hubOrderId: row.order_code,
-            customerName: row.customer_name,
-            customerPhone: row.customer_phone || undefined,
-            pickupAddress: row.pickup_address,
-            deliveryAddress: row.delivery_address,
-            specialInstructions: row.special_instructions || undefined,
-            items: [],
-            total: row.total_fee || 0,
-            sourceSite: "Hub",
-            status: "assigned",
-            agentId: row.agent_id || "",
-            agentName: "",
-            createdAt: row.created_at,
-            fee: row.total_fee || 0,
-          };
-          startCountdown(order);
+          // Only trigger incoming alert for orders that look newly assigned
+          const status = row.status;
+          if (status && ["pending", "confirmed", "accepted", "ready"].includes(status)) {
+            startCountdown(mapOrderRow(row));
+          }
+        }
+      )
+      // Also watch for UPDATE so if MFC assigns an existing order to us:
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "orders",
+          filter: `agent_user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          const oldRow = payload.old as any;
+          // Only fire if agent_user_id was just assigned (was null before)
+          if (!oldRow.agent_user_id && row.agent_user_id === user.id) {
+            startCountdown(mapOrderRow(row));
+          }
         }
       )
       .subscribe();
@@ -147,22 +131,16 @@ export function useIncomingOrder() {
     if (!incoming || !agent || !user) return;
     if (countdownRef.current) clearInterval(countdownRef.current);
 
-    // Record acceptance
+    // Record acceptance in agent_order_responses
     await supabase.from("agent_order_responses").insert({
       agent_id: agent.id,
       user_id: user.id,
       order_id: incoming.order.id,
       response_type: "accepted",
-    });
+    } as any);
 
-    // Update order status
-    await supabase
-      .from("delivery_orders")
-      .update({ status: "accepted" })
-      .eq("id", incoming.order.id);
-
-    // Also notify hub
-    hubService.updateOrderStatus(incoming.order.hubOrderId, "accepted");
+    // Update the shared order status
+    await updateOrderStatus(incoming.order.id, "accepted", user.id);
 
     setIncoming(null);
   }, [incoming, agent, user]);
@@ -177,9 +155,13 @@ export function useIncomingOrder() {
       order_id: incoming.order.id,
       response_type: "rejected",
       reason: "Agent rejected",
-    });
+    } as any);
 
-    hubService.updateOrderStatus(incoming.order.hubOrderId, "rejected");
+    // Unassign from this agent so MFC can reassign
+    await supabase
+      .from("orders")
+      .update({ agent_id: null, agent_user_id: null } as any)
+      .eq("id", incoming.order.id);
 
     setIncoming(null);
   }, [incoming, agent, user]);

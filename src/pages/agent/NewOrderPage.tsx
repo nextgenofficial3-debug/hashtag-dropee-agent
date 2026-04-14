@@ -51,21 +51,28 @@ export default function NewOrderPage() {
 
     const totalFee = items.reduce((s, i) => s + i.price * i.quantity, 0);
 
-    const { error } = await supabase.from("delivery_orders").insert({
-      order_code: orderCode,
+    // Insert into the shared MFC `orders` table.
+    // Items are stored as a JSON array to match the MFC schema.
+    const { error } = await supabase.from("orders").insert({
+      hub_order_id: orderCode,
       customer_name: customerName.trim(),
       customer_phone: customerPhone.trim(),
       pickup_address: pickupAddress.trim(),
-      delivery_address: deliveryAddress.trim(),
+      customer_address: deliveryAddress.trim(),
       special_instructions: specialInstructions.trim() || null,
-      package_description: packageDesc.trim() || null,
-      package_weight_kg: packageWeight ? Number(packageWeight) : 0,
-      is_fragile: isFragile,
+      items: items.length
+        ? items
+        : [{ name: packageDesc.trim() || "Package", quantity: 1, price: totalFee }],
       agent_id: agent.id,
       agent_user_id: agent.user_id,
-      status: "accepted" as any,
-      total_fee: totalFee,
-    });
+      status: "accepted",
+      fee: totalFee,
+      subtotal: totalFee,
+      total: totalFee,
+      payment_method: "cash",
+      discount: 0,
+      updated_at: new Date().toISOString(),
+    } as any);
 
     setSubmitting(false);
     if (error) {
@@ -101,6 +108,7 @@ export default function NewOrderPage() {
     setCreated({ orderCode, phone: customerPhone.trim(), address: deliveryAddress.trim() });
     toast({ title: "Order created! ✓" });
   };
+
 
   const sendWhatsAppLocationRequest = () => {
     if (!created) return;

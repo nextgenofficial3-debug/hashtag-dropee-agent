@@ -55,10 +55,11 @@ export default function OrderDetailSheet({ order, open, onOpenChange }: Props) {
   const savePlusCode = async () => {
     if (!plusCode.trim()) return;
     setSavingPlus(true);
+    // Update the shared orders table. Match by id primary key.
     const { error } = await supabase
-      .from("delivery_orders")
-      .update({ plus_code: plusCode.trim() })
-      .eq("order_code", order.hubOrderId);
+      .from("orders")
+      .update({ plus_code: plusCode.trim() } as any)
+      .eq("id", order.id);
     setSavingPlus(false);
     if (error) {
       toast({ title: "Failed to save Plus Code", variant: "destructive" });

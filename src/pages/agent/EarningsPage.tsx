@@ -22,7 +22,7 @@ export default function EarningsPage() {
     if (!agent) return;
     const fetchOrders = async () => {
       const { data } = await supabase
-        .from("delivery_orders")
+        .from("orders")
         .select("*")
         .eq("agent_user_id", agent.user_id)
         .eq("status", "delivered")
@@ -47,18 +47,18 @@ export default function EarningsPage() {
     fetchPayments();
   }, [user]);
 
-  const lifetime = deliveredOrders.reduce((s, o) => s + (o.total_fee || 0), 0);
+  const lifetime = deliveredOrders.reduce((s, o) => s + (o.fee || o.total || 0), 0);
 
   const now = new Date();
   const weekStart = startOfWeek(now);
   const weekEarnings = deliveredOrders
-    .filter((o) => new Date(o.updated_at) >= weekStart)
-    .reduce((s, o) => s + (o.total_fee || 0), 0);
+    .filter((o) => new Date(o.updated_at || o.created_at) >= weekStart)
+    .reduce((s, o) => s + (o.fee || o.total || 0), 0);
 
   const todayStr = format(now, "yyyy-MM-dd");
   const todayEarnings = deliveredOrders
-    .filter((o) => o.updated_at?.startsWith(todayStr))
-    .reduce((s, o) => s + (o.total_fee || 0), 0);
+    .filter((o) => (o.updated_at || o.created_at)?.startsWith(todayStr))
+    .reduce((s, o) => s + (o.fee || o.total || 0), 0);
 
   const avgFee = deliveredOrders.length > 0 ? lifetime / deliveredOrders.length : 0;
 
@@ -68,8 +68,8 @@ export default function EarningsPage() {
         const date = subDays(now, 13 - i);
         const dateStr = format(date, "yyyy-MM-dd");
         const value = deliveredOrders
-          .filter((o) => o.updated_at?.startsWith(dateStr))
-          .reduce((s, o) => s + (o.total_fee || 0), 0);
+          .filter((o) => (o.updated_at || o.created_at)?.startsWith(dateStr))
+          .reduce((s, o) => s + (o.fee || o.total || 0), 0);
         return { label: format(date, "d/M"), value };
       });
     }
@@ -78,8 +78,8 @@ export default function EarningsPage() {
         const ws = startOfWeek(subWeeks(now, 7 - i));
         const we = endOfWeek(ws);
         const value = deliveredOrders
-          .filter((o) => { const d = new Date(o.updated_at); return d >= ws && d <= we; })
-          .reduce((s, o) => s + (o.total_fee || 0), 0);
+          .filter((o) => { const d = new Date(o.updated_at || o.created_at); return d >= ws && d <= we; })
+          .reduce((s, o) => s + (o.fee || o.total || 0), 0);
         return { label: `W${i + 1}`, value };
       });
     }
@@ -88,8 +88,8 @@ export default function EarningsPage() {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
       const monthStr = format(monthDate, "yyyy-MM");
       const value = deliveredOrders
-        .filter((o) => o.updated_at?.startsWith(monthStr))
-        .reduce((s, o) => s + (o.total_fee || 0), 0);
+        .filter((o) => (o.updated_at || o.created_at)?.startsWith(monthStr))
+        .reduce((s, o) => s + (o.fee || o.total || 0), 0);
       return { label: format(monthDate, "MMM"), value };
     });
   }, [deliveredOrders, period]);
@@ -207,13 +207,13 @@ export default function EarningsPage() {
                       <Package className="w-4 h-4 text-accent" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-foreground">{o.order_code}</p>
+                      <p className="text-sm font-medium text-foreground">{o.hub_order_id || o.id}</p>
                       <p className="text-xs text-muted-foreground">
-                        {format(new Date(o.updated_at), "MMM d, yyyy")} · {o.delivery_address?.slice(0, 30)}
+                        {format(new Date(o.updated_at || o.created_at), "MMM d, yyyy")} · {o.customer_address?.slice(0, 30)}
                       </p>
                     </div>
                   </div>
-                  <span className="text-sm font-bold text-accent">₵{(o.total_fee || 0).toFixed(2)}</span>
+                  <span className="text-sm font-bold text-accent">₵{(o.fee || o.total || 0).toFixed(2)}</span>
                 </div>
               ))}
             </>

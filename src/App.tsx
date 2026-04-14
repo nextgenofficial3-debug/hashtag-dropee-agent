@@ -25,7 +25,7 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, isAgent, loading } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -34,15 +34,42 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
   if (!user) return <Navigate to="/auth/login" replace />;
+  if (!isAgent) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="glass rounded-2xl border border-border p-8 max-w-sm text-center space-y-4">
+          <div className="w-14 h-14 rounded-xl bg-destructive/15 flex items-center justify-center mx-auto">
+            <span className="text-3xl">🚫</span>
+          </div>
+          <h2 className="text-lg font-bold text-foreground">Not an Agent</h2>
+          <p className="text-sm text-muted-foreground">
+            Your account <span className="font-medium text-foreground">{user.email}</span> does not
+            have delivery agent access. Contact your admin to get assigned.
+          </p>
+          <button
+            onClick={async () => {
+              const { supabase } = await import("@/integrations/supabase/client");
+              await supabase.auth.signOut();
+              window.location.href = "/auth/login";
+            }}
+            className="w-full h-11 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
   return <>{children}</>;
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, isAgent, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to="/agent/dashboard" replace />;
+  if (user && isAgent) return <Navigate to="/agent/dashboard" replace />;
   return <>{children}</>;
 }
+
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
