@@ -4,10 +4,14 @@ import { Download } from "lucide-react";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { useRealtimeNotifications } from "@/hooks/useRealtimeNotifications";
+import { useFCM } from "@/hooks/useFCM";
 
 export default function AgentLayout() {
   const { canInstall, install } = useInstallPrompt();
   const { unreadCount } = useRealtimeNotifications();
+  // Initialize FCM — auto-subscribes if permission already granted,
+  // shows toast/prompt on first use via requestPermission called from Profile page
+  useFCM();
 
   return (
     <div className="min-h-screen bg-background text-foreground">
