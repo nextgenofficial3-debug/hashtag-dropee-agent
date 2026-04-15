@@ -46,9 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAgent(data as AgentProfile | null);
   };
 
-  const checkAgentRole = async (userId: string): Promise<boolean> => {
+  const checkAgentRole = async (userId: string, email?: string): Promise<boolean> => {
     // Super admin bypass as requested
-    if (user?.email === "hashtagdropee@gmail.com") return true;
+    if (email === "hashtagdropee@gmail.com") return true;
 
     const { data } = await supabase
       .from("user_roles")
@@ -60,37 +60,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          const agentRole = await checkAgentRole(session.user.id);
-          setIsAgent(agentRole);
-          if (agentRole) {
-            setTimeout(() => fetchAgentProfile(session.user!.id), 0);
-          } else {
-            setAgent(null);
-          }
+    const handleAuthChange = async (session: Session | null) => {
+      setSession(session);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+
+      if (currentUser) {
+        const agentRole = await checkAgentRole(currentUser.id, currentUser.email);
+        setIsAgent(agentRole);
+        if (agentRole) {
+          fetchAgentProfile(currentUser.id);
         } else {
-          setIsAgent(false);
           setAgent(null);
         }
-        setLoading(false);
+      } else {
+        setIsAgent(false);
+        setAgent(null);
+      }
+      setLoading(false);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        await handleAuthChange(session);
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const agentRole = await checkAgentRole(session.user.id);
-        setIsAgent(agentRole);
-        if (agentRole) {
-          fetchAgentProfile(session.user.id);
-        }
-      }
-      setLoading(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleAuthChange(session);
     });
 
     return () => subscription.unsubscribe();
