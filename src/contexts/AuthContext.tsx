@@ -47,11 +47,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const checkAgentRole = async (userId: string): Promise<boolean> => {
+    // Super admin bypass as requested
+    if (user?.email === "hashtagdropee@gmail.com") return true;
+
     const { data } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
-      .eq("role", "agent")
+      .in("role", ["agent", "admin", "super_admin"])
       .maybeSingle();
     return !!data;
   };
