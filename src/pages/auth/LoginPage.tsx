@@ -10,35 +10,6 @@ export default function LoginPage() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Handle OAuth callback — check role after redirect
-  useEffect(() => {
-    const handleCallback = async () => {
-      const hash = window.location.hash;
-      if (!hash.includes("access_token") && !window.location.search.includes("code=")) return;
-
-      setChecking(true);
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        const { data } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", session.user.id)
-          .eq("role", "agent")
-          .maybeSingle();
-
-        if (data) {
-          navigate("/agent/dashboard", { replace: true });
-        } else {
-          await supabase.auth.signOut();
-          setError("Your Google account does not have agent access. Contact your admin.");
-        }
-      }
-      setChecking(false);
-    };
-
-    handleCallback();
-  }, [navigate]);
 
   if (loading || checking) {
     return (
