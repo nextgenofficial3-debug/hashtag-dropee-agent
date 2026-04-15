@@ -79,7 +79,14 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
-            <Route path="/" element={<Navigate to="/agent/dashboard" replace />} />
+            <Route 
+              path="/" 
+              element={
+                <ProtectedRoute>
+                  <Navigate to="/agent/dashboard" replace />
+                </ProtectedRoute>
+              } 
+            />
             <Route path="/install" element={<InstallPage />} />
             <Route path="/auth/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/auth/signup" element={<Navigate to="/auth/login" replace />} />
