@@ -61,23 +61,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handleAuthChange = async (session: Session | null) => {
-      setSession(session);
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
+      try {
+        console.log("Auth state change detected:", !!session);
+        setSession(session);
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
 
-      if (currentUser) {
-        const agentRole = await checkAgentRole(currentUser.id, currentUser.email);
-        setIsAgent(agentRole);
-        if (agentRole) {
-          fetchAgentProfile(currentUser.id);
+        if (currentUser) {
+          console.log("Checking role for:", currentUser.email);
+          const agentRole = await checkAgentRole(currentUser.id, currentUser.email);
+          console.log("Is Agent:", agentRole);
+          setIsAgent(agentRole);
+          if (agentRole) {
+            fetchAgentProfile(currentUser.id);
+          } else {
+            setAgent(null);
+          }
         } else {
+          setIsAgent(false);
           setAgent(null);
         }
-      } else {
-        setIsAgent(false);
-        setAgent(null);
+      } catch (error) {
+        console.error("Error in handleAuthChange:", error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
