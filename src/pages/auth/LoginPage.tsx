@@ -5,11 +5,16 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function LoginPage() {
-  const { signInWithGoogle, loading } = useAuth();
+  const { signInWithGoogle, loading, user, isAgent } = useAuth();
   const navigate = useNavigate();
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (user && isAgent) {
+      navigate("/agent/dashboard");
+    }
+  }, [user, isAgent, navigate]);
 
   if (loading || checking) {
     return (

@@ -25,14 +25,47 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isAgent, loading } = useAuth();
+  const { user, isAgent, loading, authError, signOut } = useAuth();
+  
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <p className="text-muted-foreground text-sm animate-pulse">Syncing agent profile...</p>
       </div>
     );
   }
+
+  if (authError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+        <div className="glass rounded-2xl border border-destructive/20 p-8 max-w-sm text-center space-y-6">
+          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+            <span className="text-2xl text-destructive">⚠️</span>
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-lg font-bold text-foreground">Sync Error</h2>
+            <p className="text-sm text-muted-foreground">{authError}</p>
+          </div>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              Retry Sync
+            </button>
+            <button
+              onClick={signOut}
+              className="w-full h-11 rounded-xl bg-secondary text-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!user) return <Navigate to="/auth/login" replace />;
   if (!isAgent) {
     return (
@@ -47,11 +80,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
             have delivery agent access. Contact your admin to get assigned.
           </p>
           <button
-            onClick={async () => {
-              const { supabase } = await import("@/integrations/supabase/client");
-              await supabase.auth.signOut();
-              window.location.href = "/auth/login";
-            }}
+            onClick={signOut}
             className="w-full h-11 rounded-xl bg-destructive text-destructive-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             Sign Out
@@ -64,8 +93,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, isAgent, loading } = useAuth();
+  const { user, isAgent, loading, authError } = useAuth();
   if (loading) return null;
+  // If there is an auth error, allow showing the login page/public content
+  if (authError) return <>{children}</>;
   if (user && isAgent) return <Navigate to="/agent/dashboard" replace />;
   return <>{children}</>;
 }
