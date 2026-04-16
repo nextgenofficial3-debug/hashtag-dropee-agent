@@ -59,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const checkAgentRole = async (userId: string, email?: string): Promise<boolean> => {
-    if (email === "hashtagdropee@gmail.com") return true;
+    if (email?.toLowerCase() === "hashtagdropee@gmail.com") return true;
 
     try {
       const { data, error } = await supabase
@@ -83,10 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     let authTimeout: NodeJS.Timeout;
+    const initialized = { current: false };
 
-    const handleAuthChange = async (currentSession: Session | null) => {
+    const handleAuthChange = async (currentSession: Session | null, source: string) => {
+      // Prevent multiple parallel initializations on first load
+      if (source === "INITIAL" && initialized.current) return;
+      if (source === "INITIAL") initialized.current = true;
+
       try {
-        console.log("Auth state change detected in Agent:", !!currentSession);
+        console.group(`🔐 Agent Auth Sync [${source}]`);
+        console.log("Session exists:", !!currentSession);
         
         if (authTimeout) clearTimeout(authTimeout);
         if (!isMounted) return;
@@ -113,35 +119,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAgent(null);
         }
       } catch (error) {
-        console.error("Error in handleAuthChange Agent:", error);
+        console.error("Auth sync failed in Agent:", error);
         if (isMounted) {
-          setAuthError("Failed to initialize agent session. Please try again.");
+          setAuthError("Failed to initialize agent session.");
         }
       } finally {
         if (isMounted) setLoading(false);
+        console.groupEnd();
       }
     };
 
     // Safety timeout
     authTimeout = setTimeout(() => {
       if (isMounted && loading) {
-        console.warn("Auth initialization timeout in Agent Dashboard");
-        setAuthError("Account synchronization is taking longer than expected.");
+        console.warn("⚠️ Auth initialization timeout reached in Agent Dashboard");
+        setAuthError("Synchronization is taking longer than expected.");
         setLoading(false);
       }
     }, 8000);
 
     // Initial session check
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (isMounted) handleAuthChange(session);
+      if (isMounted) handleAuthChange(session, "SESSION_GET");
     }).catch(err => {
       console.error("Initial session fetch error Agent:", err);
       if (isMounted) setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (isMounted) await handleAuthChange(session);
+      async (event, session) => {
+        if (isMounted) await handleAuthChange(session, event);
       }
     );
 
