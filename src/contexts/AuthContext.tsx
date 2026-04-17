@@ -82,56 +82,84 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let isMounted = true;
+    let mounted = true;
 
-    // Safety timeout — 6 s max
-    const authTimeout = setTimeout(() => {
-      if (isMounted && loading) {
-        console.warn("⚠️ Auth initialization timeout in Agent Dashboard");
-        setAuthError("Synchronization is taking longer than expected.");
+    // Safety timeout — forces setLoading(false) after 5 s if INITIAL_SESSION never fires
+    const safetyTimer = setTimeout(() => {
+      if (mounted) {
+        console.warn("Agent: INITIAL_SESSION never fired — forcing loading=false");
+        setAuthError("Session check timed out. Please refresh.");
         setLoading(false);
       }
-    }, 6000);
+    }, 5000);
 
-    // ─── SINGLE SOURCE OF TRUTH ──────────────────────────────────────────────
-    // onAuthStateChange fires INITIAL_SESSION on page load — this fully
-    // replaces the old getSession() + onAuthStateChange dual-trigger pattern
-    // that caused race conditions and infinite loading states.
-    // ─────────────────────────────────────────────────────────────────────────
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
-        if (!isMounted) return;
+        if (!mounted) return;
 
         console.log(`🔐 Agent Auth Event [${event}]`);
-        clearTimeout(authTimeout);
 
-        setSession(currentSession);
-        const currentUser = currentSession?.user ?? null;
-        setUser(currentUser);
+        if (event === "INITIAL_SESSION") {
+          // Clear the safety timer — we got a real response
+          clearTimeout(safetyTimer);
 
-        if (currentUser) {
-          const hasAgentRole = await checkAgentRole(currentUser.id, currentUser.email ?? undefined);
-          if (isMounted) {
-            setIsAgent(hasAgentRole);
-            if (hasAgentRole) {
-              const profile = await fetchAgentProfile(currentUser.id);
-              if (isMounted) setAgent(profile);
-            } else {
-              setAgent(null);
+          setSession(currentSession);
+          const currentUser = currentSession?.user ?? null;
+          setUser(currentUser);
+
+          if (currentUser && mounted) {
+            const hasAgentRole = await checkAgentRole(currentUser.id, currentUser.email ?? undefined);
+            if (mounted) {
+              setIsAgent(hasAgentRole);
+              if (hasAgentRole) {
+                const profile = await fetchAgentProfile(currentUser.id);
+                if (mounted) setAgent(profile);
+              } else {
+                setAgent(null);
+              }
+            }
+          } else {
+            setIsAgent(false);
+            setAgent(null);
+          }
+
+          // setLoading(false) ONLY here — on INITIAL_SESSION
+          if (mounted) setLoading(false);
+
+        } else if (event === "SIGNED_IN") {
+          setSession(currentSession);
+          const currentUser = currentSession?.user ?? null;
+          setUser(currentUser);
+          if (currentUser && mounted) {
+            const hasAgentRole = await checkAgentRole(currentUser.id, currentUser.email ?? undefined);
+            if (mounted) {
+              setIsAgent(hasAgentRole);
+              if (hasAgentRole) {
+                const profile = await fetchAgentProfile(currentUser.id);
+                if (mounted) setAgent(profile);
+              } else {
+                setAgent(null);
+              }
             }
           }
-        } else {
-          setIsAgent(false);
-          setAgent(null);
-        }
 
-        if (isMounted) setLoading(false);
+        } else if (event === "SIGNED_OUT") {
+          if (mounted) {
+            setSession(null);
+            setUser(null);
+            setIsAgent(false);
+            setAgent(null);
+          }
+
+        } else if (event === "TOKEN_REFRESHED") {
+          if (mounted) setSession(currentSession);
+        }
       }
     );
 
     return () => {
-      isMounted = false;
-      clearTimeout(authTimeout);
+      mounted = false;
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
   }, []);
