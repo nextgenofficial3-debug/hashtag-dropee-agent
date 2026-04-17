@@ -142,6 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               }
             }
           }
+          if (mounted) setLoading(false);
+          if ("caches" in window) {
+            caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+          }
 
         } else if (event === "SIGNED_OUT") {
           if (mounted) {
@@ -149,6 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(null);
             setIsAgent(false);
             setAgent(null);
+            setLoading(false);
           }
 
         } else if (event === "TOKEN_REFRESHED") {

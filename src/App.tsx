@@ -19,6 +19,7 @@ import CustomersPage from "@/pages/agent/CustomersPage";
 import VendorsPage from "@/pages/agent/VendorsPage";
 import ExternalOrdersPage from "@/pages/agent/ExternalOrdersPage";
 import LoginPage from "@/pages/auth/LoginPage";
+import AuthCallbackHandler from "@/pages/auth/AuthCallbackHandler";
 import InstallPage from "@/pages/InstallPage";
 import NotFound from "./pages/NotFound";
 import OrderDetailPage from "@/pages/agent/OrderDetailPage";
@@ -122,6 +123,7 @@ const App = () => (
             <Route path="/install" element={<InstallPage />} />
             <Route path="/auth/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
             <Route path="/auth/signup" element={<Navigate to="/auth/login" replace />} />
+            <Route path="/auth/callback" element={<AuthCallbackHandler />} />
             <Route
               path="/agent"
               element={

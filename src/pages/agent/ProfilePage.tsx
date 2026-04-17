@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Camera, Bike, Car, Footprints, Star, Package, DollarSign, Calendar, Save, Loader2, Download } from "lucide-react";
+import { Camera, Bike, Car, Footprints, Star, Package, DollarSign, Calendar, Save, Loader2, Download, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { useInstallPrompt } from "@/hooks/useInstallPrompt";
+import { AvailabilityToggle } from "@/components/features/AvailabilityToggle";
 
 type Vehicle = "bike" | "car" | "foot";
 
@@ -17,7 +18,7 @@ const vehicles: { key: Vehicle; icon: React.ElementType; label: string }[] = [
 ];
 
 export default function ProfilePage() {
-  const { agent } = useAuth();
+  const { agent, user, signOut } = useAuth();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -193,6 +194,14 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Availability Toggle */}
+      {agent?.user_id && (
+        <div className="glass rounded-2xl p-4 space-y-2">
+          <p className="text-sm font-semibold text-foreground">Availability</p>
+          <AvailabilityToggle userId={agent.user_id} />
+        </div>
+      )}
+
       {/* Save */}
       <div className="space-y-3">
         <motion.button
@@ -224,6 +233,14 @@ export default function ProfilePage() {
           <Download className="w-5 h-5 text-primary" />
           Download Android APK
         </a>
+
+        <button
+          onClick={signOut}
+          className="w-full py-4 rounded-2xl bg-destructive/15 border border-destructive/30 text-destructive text-base font-bold flex items-center justify-center gap-2 active:scale-[0.97] transition-transform"
+        >
+          <LogOut className="w-5 h-5" />
+          Sign Out
+        </button>
       </div>
     </div>
   );
