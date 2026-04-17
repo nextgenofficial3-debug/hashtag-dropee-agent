@@ -21,6 +21,7 @@ import ExternalOrdersPage from "@/pages/agent/ExternalOrdersPage";
 import LoginPage from "@/pages/auth/LoginPage";
 import InstallPage from "@/pages/InstallPage";
 import NotFound from "./pages/NotFound";
+import OrderDetailPage from "@/pages/agent/OrderDetailPage";
 
 const queryClient = new QueryClient();
 
@@ -131,6 +132,7 @@ const App = () => (
             >
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="orders" element={<OrdersPage />} />
+              <Route path="orders/:orderId" element={<OrderDetailPage />} />
               <Route path="active-delivery" element={<ActiveDeliveryPage />} />
               <Route path="complete-delivery" element={<CompleteDeliveryPage />} />
               <Route path="earnings" element={<EarningsPage />} />

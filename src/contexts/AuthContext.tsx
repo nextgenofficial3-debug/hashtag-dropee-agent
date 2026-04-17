@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .select("*")
         .eq("user_id", userId)
         .single();
-      
+
       if (error) {
         console.error("Error fetching agent profile:", error);
         return null;
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const checkAgentRole = async (userId: string, email?: string): Promise<boolean> => {
+    // Super admin always has access
     if (email?.toLowerCase() === "hashtagdropee@gmail.com") return true;
 
     try {
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq("user_id", userId)
         .in("role", ["agent", "admin", "super_admin"])
         .maybeSingle();
-      
+
       if (error) {
         console.error("Error checking agent role:", error);
         return false;
@@ -82,29 +83,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
-    let authTimeout: NodeJS.Timeout;
-    const initialized = { current: false };
 
-    const handleAuthChange = async (currentSession: Session | null, source: string) => {
-      // Prevent multiple parallel initializations on first load
-      if (source === "INITIAL" && initialized.current) return;
-      if (source === "INITIAL") initialized.current = true;
+    // Safety timeout — 6 s max
+    const authTimeout = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn("⚠️ Auth initialization timeout in Agent Dashboard");
+        setAuthError("Synchronization is taking longer than expected.");
+        setLoading(false);
+      }
+    }, 6000);
 
-      try {
-        console.group(`🔐 Agent Auth Sync [${source}]`);
-        console.log("Session exists:", !!currentSession);
-        
-        if (authTimeout) clearTimeout(authTimeout);
+    // ─── SINGLE SOURCE OF TRUTH ──────────────────────────────────────────────
+    // onAuthStateChange fires INITIAL_SESSION on page load — this fully
+    // replaces the old getSession() + onAuthStateChange dual-trigger pattern
+    // that caused race conditions and infinite loading states.
+    // ─────────────────────────────────────────────────────────────────────────
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
         if (!isMounted) return;
+
+        console.log(`🔐 Agent Auth Event [${event}]`);
+        clearTimeout(authTimeout);
 
         setSession(currentSession);
         const currentUser = currentSession?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
-          console.log("Checking agent role for:", currentUser.email);
-          const hasAgentRole = await checkAgentRole(currentUser.id, currentUser.email);
-          
+          const hasAgentRole = await checkAgentRole(currentUser.id, currentUser.email ?? undefined);
           if (isMounted) {
             setIsAgent(hasAgentRole);
             if (hasAgentRole) {
@@ -118,50 +124,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsAgent(false);
           setAgent(null);
         }
-      } catch (error) {
-        console.error("Auth sync failed in Agent:", error);
-        if (isMounted) {
-          setAuthError("Failed to initialize agent session.");
-        }
-      } finally {
+
         if (isMounted) setLoading(false);
-        console.groupEnd();
-      }
-    };
-
-    // Safety timeout
-    authTimeout = setTimeout(() => {
-      if (isMounted && loading) {
-        console.warn("⚠️ Auth initialization timeout reached in Agent Dashboard");
-        setAuthError("Synchronization is taking longer than expected.");
-        setLoading(false);
-      }
-    }, 8000);
-
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (isMounted) handleAuthChange(session, "SESSION_GET");
-    }).catch(err => {
-      console.error("Initial session fetch error Agent:", err);
-      if (isMounted) setLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (isMounted) await handleAuthChange(session, event);
       }
     );
 
     return () => {
       isMounted = false;
-      if (authTimeout) clearTimeout(authTimeout);
+      clearTimeout(authTimeout);
       subscription.unsubscribe();
     };
   }, []);
 
   const signInWithGoogle = async () => {
     try {
-      setLoading(true);
       setAuthError(null);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -177,7 +153,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err: any) {
       console.error("Google sign-in error Agent:", err);
       setAuthError(err.message || "Failed to start Google sign-in");
-      setLoading(false);
     }
   };
 

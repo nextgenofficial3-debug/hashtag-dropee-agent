@@ -10,7 +10,23 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="canonical" href="https://deliverpro.app" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <!-- Force clear legacy service worker cache if stuck -->
+    <script>
+      (function() {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+              if (window.location.search.includes('clear_sw=true')) {
+                registration.unregister();
+                console.log('Force unregistered service worker');
+              }
+            }
+          });
+        }
+      })();
+    </script>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.supabase.co https://*.googleusercontent.com; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://mpqaictrrrncwqrkpdos.supabase.co wss://mpqaictrrrncwqrkpdos.supabase.co https://*.googleapis.com https://*.google.com https://agent.discoverukhrul.site; frame-src 'self' https://*.google.com;">
 
     <!-- Open Graph -->
     <meta property="og:title" content="DeliverPro — Delivery Agent App" />
@@ -39,8 +55,8 @@
 
     <link rel="icon" href="/favicon.png" type="image/png">
     <link rel="manifest" href="/manifest.json" />
-    <script type="module" crossorigin src="/assets/index-BDgeLrul.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-xjA0od09.css">
+    <script type="module" crossorigin src="/assets/index-Dn0W1zGB.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-OtqkT4qW.css">
   <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
   <body>
     <div id="root"></div>
