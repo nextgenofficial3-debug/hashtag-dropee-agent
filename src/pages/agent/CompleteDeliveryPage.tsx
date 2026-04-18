@@ -100,6 +100,16 @@ export default function CompleteDeliveryPage() {
         return;
       }
 
+      // Record agent earnings
+      const { error: earnError } = await supabase.from("agent_earnings").insert({
+        agent_id: agent.user_id,
+        order_id: localOrder?.id || order.id,
+        amount: total,
+        points: 10,
+        status: "pending"
+      });
+      if (earnError) console.error("Earnings record failed:", earnError);
+
       setCompleted(true);
       setTimeout(() => navigate("/agent/dashboard"), 3000);
     } catch (e) {

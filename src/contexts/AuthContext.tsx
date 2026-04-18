@@ -84,24 +84,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Safety timeout — silently unblock loading after 15 s if INITIAL_SESSION never fires
-    const safetyTimer = setTimeout(() => {
-      if (mounted) {
-        console.warn("Agent: INITIAL_SESSION never fired — forcing loading=false");
-        setLoading(false);
-      }
-    }, 15000);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         if (!mounted) return;
 
-        console.log(`🔐 Agent Auth Event [${event}]`);
-
-        if (event === "INITIAL_SESSION") {
-          // Clear the safety timer — we got a real response
-          clearTimeout(safetyTimer);
-
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
           setSession(currentSession);
           const currentUser = currentSession?.user ?? null;
           setUser(currentUser);
@@ -122,48 +109,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setAgent(null);
           }
 
-          // setLoading(false) ONLY here — on INITIAL_SESSION
+          // Clear stale cache on sign in
+          if (event === 'SIGNED_IN' && 'caches' in window) {
+            caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+          }
           if (mounted) setLoading(false);
-
-        } else if (event === "SIGNED_IN") {
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setUser(null);
+          setIsAgent(false);
+          setAgent(null);
+          setLoading(false);
+        } else if (event === 'TOKEN_REFRESHED') {
           setSession(currentSession);
-          const currentUser = currentSession?.user ?? null;
-          setUser(currentUser);
-          if (currentUser && mounted) {
-            const hasAgentRole = await checkAgentRole(currentUser.id, currentUser.email ?? undefined);
-            if (mounted) {
-              setIsAgent(hasAgentRole);
-              if (hasAgentRole) {
-                const profile = await fetchAgentProfile(currentUser.id);
-                if (mounted) setAgent(profile);
-              } else {
-                setAgent(null);
-              }
-            }
-          }
-          if (mounted) setLoading(false);
-          if ("caches" in window) {
-            caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
-          }
-
-        } else if (event === "SIGNED_OUT") {
-          if (mounted) {
-            setSession(null);
-            setUser(null);
-            setIsAgent(false);
-            setAgent(null);
-            setLoading(false);
-          }
-
-        } else if (event === "TOKEN_REFRESHED") {
-          if (mounted) setSession(currentSession);
         }
       }
     );
 
+    // Hard fallback — never spin forever
+    const fallback = setTimeout(() => {
+      if (mounted) setLoading(false);
+    }, 8000);
+
     return () => {
       mounted = false;
-      clearTimeout(safetyTimer);
+      clearTimeout(fallback);
       subscription.unsubscribe();
     };
   }, []);
@@ -189,11 +159,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setAgent(null);
-    setIsAgent(false);
-    setUser(null);
-    setSession(null);
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      await supabase.auth.signOut();
+    } finally {
+      window.location.href = '/login'; // hard redirect always
+    }
   };
 
   return (

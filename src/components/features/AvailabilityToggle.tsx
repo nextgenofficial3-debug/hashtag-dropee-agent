@@ -23,12 +23,16 @@ export function AvailabilityToggle({ userId }: AvailabilityToggleProps) {
       });
   }, [userId]);
 
-  const toggle = async () => {
+    const toggle = async () => {
     setSaving(true);
     const newStatus = !isOnline;
     const { error } = await supabase
       .from("delivery_agents")
-      .update({ is_online: newStatus, updated_at: new Date().toISOString() })
+      .update({ 
+        is_online: newStatus, 
+        status: newStatus ? 'online' : 'offline',
+        updated_at: new Date().toISOString() 
+      })
       .eq("user_id", userId);
 
     if (!error) setIsOnline(newStatus);

@@ -87,11 +87,20 @@ export default function ProfilePage() {
     setSaving(true);
     const { error } = await supabase
       .from("delivery_agents")
-      .update({ full_name: name, phone, email, vehicle })
-      .eq("user_id", agent.user_id);
+      .upsert(
+        { 
+          user_id: agent.user_id,
+          full_name: name, 
+          phone, 
+          email, 
+          vehicle,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'user_id' }
+      );
     setSaving(false);
     if (error) {
-      toast.error("Failed to update profile");
+      toast.error("Failed to update profile: " + error.message);
     } else {
       toast.success("Profile updated successfully!");
     }
