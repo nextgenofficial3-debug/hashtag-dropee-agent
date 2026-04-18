@@ -84,14 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Safety timeout — forces setLoading(false) after 5 s if INITIAL_SESSION never fires
+    // Safety timeout — silently unblock loading after 15 s if INITIAL_SESSION never fires
     const safetyTimer = setTimeout(() => {
       if (mounted) {
         console.warn("Agent: INITIAL_SESSION never fired — forcing loading=false");
-        setAuthError("Session check timed out. Please refresh.");
         setLoading(false);
       }
-    }, 5000);
+    }, 15000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
