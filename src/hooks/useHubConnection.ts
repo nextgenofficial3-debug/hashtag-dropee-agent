@@ -1,13 +1,19 @@
 import { useState, useEffect } from "react";
-import { hubService } from "@/services/hubService";
 
 export function useHubConnection() {
-  const [hubConnected, setHubConnected] = useState(hubService.isConnected);
+  const [hubConnected, setHubConnected] = useState(() => navigator.onLine);
 
   useEffect(() => {
-    setHubConnected(hubService.isConnected);
-    const unsub = hubService.onConnectionChange(setHubConnected);
-    return () => { unsub(); };
+    const handleOnline = () => setHubConnected(true);
+    const handleOffline = () => setHubConnected(false);
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
 
   return hubConnected;

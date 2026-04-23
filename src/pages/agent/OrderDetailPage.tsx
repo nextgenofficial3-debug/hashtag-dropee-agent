@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { findSharedOrderByIdentifier, mapOrderRow, updateOrderStatus } from "@/services/hubService";
 import {
-  ArrowLeft, MapPin, Phone, User, Package, Clock,
-  Navigation, CheckCircle2, Truck, AlertCircle,
+  ArrowLeft,
+  MapPin,
+  Phone,
+  User,
+  Package,
+  Clock,
+  Navigation,
+  CheckCircle2,
+  Truck,
+  AlertCircle,
 } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
 
@@ -25,25 +33,22 @@ interface Order {
 }
 
 const STATUS_FLOW = [
-  { key: "pending_assignment", label: "Pending", icon: Clock },
-  { key: "accepted", label: "Accepted", icon: CheckCircle2 },
+  { key: "assigned", label: "Assigned", icon: Clock },
   { key: "picked_up", label: "Picked Up", icon: Package },
-  { key: "in_transit", label: "In Transit", icon: Truck },
+  { key: "on_the_way", label: "In Transit", icon: Truck },
   { key: "delivered", label: "Delivered", icon: CheckCircle2 },
 ];
 
 const NEXT_STATUS: Record<string, string> = {
-  pending_assignment: "accepted",
-  accepted: "picked_up",
-  picked_up: "in_transit",
-  in_transit: "delivered",
+  assigned: "picked_up",
+  picked_up: "on_the_way",
+  on_the_way: "delivered",
 };
 
 const NEXT_LABEL: Record<string, string> = {
-  pending_assignment: "Accept Order",
-  accepted: "Mark Picked Up",
+  assigned: "Confirm Pickup",
   picked_up: "Start Delivery",
-  in_transit: "Mark Delivered",
+  on_the_way: "Mark Delivered",
 };
 
 export default function OrderDetailPage() {
@@ -60,83 +65,72 @@ export default function OrderDetailPage() {
     if (!orderId) return;
 
     const fetchOrder = async () => {
-      const { data, error } = await supabase
-        .from("delivery_orders")
-        .select("*")
-        .eq("id", orderId)
-        .single();
-
-      if (error) {
-        console.error("Error fetching order:", error);
+      const data = await findSharedOrderByIdentifier(orderId);
+      if (!data) {
         toast({ title: "Order not found", variant: "destructive" });
         navigate(-1);
         return;
       }
-      setOrder(data as Order);
+
+      const mapped = mapOrderRow(data);
+      setOrder({
+        id: data.id,
+        order_code: data.hub_order_id || data.id,
+        customer_name: data.customer_name,
+        customer_phone: data.customer_phone,
+        pickup_address: data.pickup_address || "Pickup location",
+        drop_address: data.customer_address,
+        status: mapped.status,
+        total_fee: data.fee ?? data.total ?? null,
+        notes: data.special_instructions,
+        created_at: data.created_at,
+        items_description: mapped.items.length
+          ? mapped.items.map((item) => `${item.quantity}x ${item.name}`).join(", ")
+          : null,
+      });
       setLoading(false);
     };
 
     fetchOrder();
+  }, [orderId, navigate, toast]);
 
-    // Realtime subscription for status updates
-    const channel = supabase
-      .channel(`order-${orderId}`)
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "delivery_orders",
-        filter: `id=eq.${orderId}`,
-      }, (payload) => {
-        setOrder((prev) => prev ? { ...prev, ...payload.new } : prev);
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [orderId]);
-
-  const updateStatus = async (newStatus: string) => {
+  const handleStatusUpdate = async (newStatus: string) => {
     if (!order || !user) return;
     setUpdating(true);
 
-    const { error } = await supabase
-      .from("delivery_orders")
-      .update({ status: newStatus })
-      .eq("id", order.id);
-
-    if (error) {
-      toast({ title: "Failed to update status", variant: "destructive" });
-    } else {
-      // Write to order_status_logs
-      await supabase.from("order_status_logs").insert({
-        order_id: order.id,
-        status: newStatus,
-        updated_by: user.id,
-        updated_at: new Date().toISOString(),
-      }).catch(() => {});
-
-      setOrder((prev) => prev ? { ...prev, status: newStatus } : prev);
-      toast({ title: `Order ${newStatus.replace(/_/g, " ")} ✓` });
-
-      if (newStatus === "delivered") {
-        setTimeout(() => navigate("/agent/orders"), 1500);
-      }
+    const { success, error } = await updateOrderStatus(order.id, newStatus, user.id);
+    if (!success) {
+      toast({ title: "Failed to update status", description: error, variant: "destructive" });
+      setUpdating(false);
+      return;
     }
+
+    setOrder((prev) => (prev ? { ...prev, status: newStatus } : prev));
+    toast({ title: `Order ${newStatus.replace(/_/g, " ")} updated` });
+
+    if (newStatus === "delivered") {
+      setTimeout(() => navigate("/agent/orders"), 1500);
+    }
+
     setUpdating(false);
   };
 
   const openMapsPickup = () => {
     if (!order) return;
-    const q = encodeURIComponent(order.pickup_address);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, "_blank");
+    const query = encodeURIComponent(order.pickup_address);
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
   };
 
   const openMapsDrop = () => {
     if (!order) return;
-    const q = encodeURIComponent(order.drop_address);
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${q}`, "_blank");
+    const query = encodeURIComponent(order.drop_address);
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${query}`, "_blank");
   };
 
-  const currentStepIndex = STATUS_FLOW.findIndex((s) => s.key === order?.status);
+  const currentStepIndex = Math.max(
+    STATUS_FLOW.findIndex((step) => step.key === order?.status),
+    0
+  );
   const nextStatus = order ? NEXT_STATUS[order.status] : null;
 
   if (loading) {
@@ -151,7 +145,6 @@ export default function OrderDetailPage() {
 
   return (
     <div className="min-h-screen bg-background max-w-[430px] mx-auto">
-      {/* Header */}
       <div className="sticky top-0 z-20 glass-strong border-b border-border px-4 py-3 flex items-center gap-3">
         <button
           onClick={() => navigate(-1)}
@@ -163,11 +156,15 @@ export default function OrderDetailPage() {
           <p className="text-sm font-bold text-foreground">Order #{order.order_code}</p>
           <p className="text-xs text-muted-foreground">{formatRelativeTime(order.created_at)}</p>
         </div>
-        <span className={`inline-flex text-[10px] font-semibold px-2.5 py-1 rounded-full ${
-          order.status === "delivered" ? "bg-emerald-500/15 text-emerald-400" :
-          order.status === "cancelled" ? "bg-destructive/15 text-destructive" :
-          "bg-primary/15 text-primary"
-        }`}>
+        <span
+          className={`inline-flex text-[10px] font-semibold px-2.5 py-1 rounded-full ${
+            order.status === "delivered"
+              ? "bg-emerald-500/15 text-emerald-400"
+              : order.status === "cancelled"
+              ? "bg-destructive/15 text-destructive"
+              : "bg-primary/15 text-primary"
+          }`}
+        >
           {order.status.replace(/_/g, " ")}
         </span>
       </div>
@@ -177,41 +174,49 @@ export default function OrderDetailPage() {
         animate={{ opacity: 1, y: 0 }}
         className="p-4 space-y-4 pb-32"
       >
-        {/* Progress Bar */}
         <div className="glass rounded-2xl border border-border p-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
             Delivery Progress
           </p>
-          <div className="relative">
-            <div className="flex justify-between items-center">
-              {STATUS_FLOW.slice(0, -1).map((step, idx) => {
-                const isCompleted = idx < currentStepIndex;
-                const isActive = idx === currentStepIndex;
-                const Icon = step.icon;
-                return (
-                  <div key={step.key} className="flex flex-col items-center gap-1.5 flex-1">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+          <div className="flex justify-between items-center">
+            {STATUS_FLOW.map((step, idx) => {
+              const isCompleted = idx < currentStepIndex;
+              const isActive = idx === currentStepIndex;
+              const Icon = step.icon;
+              return (
+                <div key={step.key} className="flex flex-col items-center gap-1.5 flex-1">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
                       isCompleted
                         ? "bg-primary border-primary"
                         : isActive
                         ? "bg-primary/15 border-primary"
                         : "bg-secondary border-border"
-                    }`}>
-                      <Icon className={`w-4 h-4 ${isCompleted || isActive ? "text-primary" : "text-muted-foreground"}`} />
-                    </div>
-                    <p className={`text-[9px] font-medium text-center leading-tight ${
-                      isActive ? "text-primary" : isCompleted ? "text-foreground" : "text-muted-foreground"
-                    }`}>
-                      {step.label}
-                    </p>
+                    }`}
+                  >
+                    <Icon
+                      className={`w-4 h-4 ${
+                        isCompleted || isActive ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    />
                   </div>
-                );
-              })}
-            </div>
+                  <p
+                    className={`text-[9px] font-medium text-center leading-tight ${
+                      isActive
+                        ? "text-primary"
+                        : isCompleted
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {step.label}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Customer Info */}
         <div className="glass rounded-2xl border border-border p-4 space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Customer</p>
           <div className="flex items-center gap-3">
@@ -233,15 +238,10 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Addresses */}
         <div className="glass rounded-2xl border border-border p-4 space-y-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Route</p>
 
-          {/* Pickup */}
-          <div
-            className="flex items-start gap-3 cursor-pointer group"
-            onClick={openMapsPickup}
-          >
+          <div className="flex items-start gap-3 cursor-pointer group" onClick={openMapsPickup}>
             <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0 mt-0.5">
               <MapPin className="w-4 h-4 text-amber-400" />
             </div>
@@ -254,11 +254,7 @@ export default function OrderDetailPage() {
 
           <div className="h-px bg-border mx-4" />
 
-          {/* Dropoff */}
-          <div
-            className="flex items-start gap-3 cursor-pointer group"
-            onClick={openMapsDrop}
-          >
+          <div className="flex items-start gap-3 cursor-pointer group" onClick={openMapsDrop}>
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
               <MapPin className="w-4 h-4 text-primary" />
             </div>
@@ -270,18 +266,17 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Order Details */}
         <div className="glass rounded-2xl border border-border p-4 space-y-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Order Info</p>
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div>
               <p className="text-muted-foreground">Items</p>
-              <p className="font-medium text-foreground mt-0.5">{order.items_description || "—"}</p>
+              <p className="font-medium text-foreground mt-0.5">{order.items_description || "-"}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Delivery Fee</p>
               <p className="font-semibold text-emerald-400 mt-0.5">
-                {order.total_fee != null ? `₹${order.total_fee}` : "TBD"}
+                {order.total_fee != null ? `Rs${order.total_fee}` : "TBD"}
               </p>
             </div>
             {order.notes && (
@@ -294,7 +289,6 @@ export default function OrderDetailPage() {
         </div>
       </motion.div>
 
-      {/* Bottom CTA */}
       {nextStatus && !["delivered", "cancelled"].includes(order.status) && (
         <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] p-4 bg-background border-t border-border">
           {order.status === "cancelled" ? (
@@ -304,7 +298,7 @@ export default function OrderDetailPage() {
             </div>
           ) : (
             <button
-              onClick={() => updateStatus(nextStatus)}
+              onClick={() => handleStatusUpdate(nextStatus)}
               disabled={updating}
               className="w-full h-14 rounded-2xl bg-primary text-primary-foreground text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2"
             >

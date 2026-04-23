@@ -19,7 +19,7 @@ export default function HubConnectionBadge() {
       ) : (
         <WifiOff className="w-3 h-3" />
       )}
-      {connected ? "Hub Connected" : "Hub Offline"}
+      {connected ? "Live Sync Online" : "Live Sync Offline"}
     </div>
   );
 }

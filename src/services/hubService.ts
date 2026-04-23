@@ -7,6 +7,9 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+
+type SharedOrderRow = Tables<"orders">;
 
 export interface HubOrder {
   id: string;
@@ -27,49 +30,78 @@ export interface HubOrder {
   cancelReason?: string;
 }
 
+const DB_TO_UI_STATUS: Record<string, HubOrder["status"]> = {
+  pending: "assigned",
+  confirmed: "assigned",
+  preparing: "assigned",
+  ready: "assigned",
+  accepted: "assigned",
+  assigned: "assigned",
+  en_route_pickup: "assigned",
+  arrived_pickup: "assigned",
+  picked_up: "picked_up",
+  in_transit: "on_the_way",
+  out_for_delivery: "on_the_way",
+  arrived_delivery: "on_the_way",
+  on_the_way: "on_the_way",
+  delivered: "delivered",
+  cancelled: "cancelled",
+};
+
+const UI_TO_DB_STATUS: Record<string, string> = {
+  assigned: "accepted",
+  on_the_way: "in_transit",
+};
+
 /**
  * Maps a raw `orders` row from Supabase into the HubOrder shape used by all
  * agent components. Status values are mapped from the MFC status strings.
  */
-export function mapOrderRow(row: any): HubOrder {
+export function mapOrderRow(row: SharedOrderRow | Record<string, unknown>): HubOrder {
+  const order = row as SharedOrderRow & Record<string, unknown>;
   return {
-    id: row.id,
-    hubOrderId: row.hub_order_id || row.id,
-    customerName: row.customer_name,
-    customerPhone: row.customer_phone || undefined,
-    pickupAddress: row.pickup_address || undefined,
-    deliveryAddress: row.customer_address,
-    specialInstructions: row.special_instructions || undefined,
-    items: Array.isArray(row.items) ? row.items : [],
-    total: row.total || 0,
+    id: order.id,
+    hubOrderId: order.hub_order_id || order.id,
+    customerName: order.customer_name,
+    customerPhone: order.customer_phone || undefined,
+    pickupAddress: order.pickup_address || undefined,
+    deliveryAddress: order.customer_address,
+    specialInstructions: order.special_instructions || undefined,
+    items: Array.isArray(order.items) ? (order.items as HubOrder["items"]) : [],
+    total: order.total || 0,
     sourceSite: "MFC",
-    status: mapStatus(row.status),
-    agentId: row.agent_id || "",
+    status: mapStatus(order.status),
+    agentId: order.agent_id || "",
     agentName: "",
-    createdAt: row.created_at,
-    fee: row.fee || 0,
+    createdAt: order.created_at,
+    fee: order.fee || 0,
   };
 }
 
 function mapStatus(status: string): HubOrder["status"] {
-  const map: Record<string, HubOrder["status"]> = {
-    // MFC statuses
-    pending: "assigned",
-    confirmed: "assigned",
-    preparing: "assigned",
-    ready: "assigned",
-    // Agent workflow statuses stored on the orders row
-    accepted: "assigned",
-    en_route_pickup: "assigned",
-    arrived_pickup: "assigned",
-    picked_up: "picked_up",
-    in_transit: "on_the_way",
-    arrived_delivery: "on_the_way",
-    out_for_delivery: "on_the_way",
-    delivered: "delivered",
-    cancelled: "cancelled",
-  };
-  return map[status] || "assigned";
+  return DB_TO_UI_STATUS[status] || "assigned";
+}
+
+function mapStatusForWrite(status: string) {
+  return UI_TO_DB_STATUS[status] || status;
+}
+
+export async function findSharedOrderByIdentifier(orderIdentifier: string) {
+  const byId = await supabase
+    .from("orders")
+    .select("*")
+    .eq("id", orderIdentifier)
+    .maybeSingle();
+
+  if (byId.data) return byId.data;
+
+  const byHubOrderId = await supabase
+    .from("orders")
+    .select("*")
+    .eq("hub_order_id", orderIdentifier)
+    .maybeSingle();
+
+  return byHubOrderId.data ?? null;
 }
 
 /**
@@ -77,30 +109,38 @@ function mapStatus(status: string): HubOrder["status"] {
  * Also appends a row to order_status_timeline for audit trail.
  */
 export async function updateOrderStatus(
-  orderId: string,
+  orderIdentifier: string,
   status: string,
   agentUserId?: string,
   cancelReason?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const order = await findSharedOrderByIdentifier(orderIdentifier);
+    if (!order) {
+      return { success: false, error: "Order not found" };
+    }
+
+    const nextStatus = mapStatusForWrite(status);
+    const updates: TablesUpdate<"orders"> = {
+      status: nextStatus,
+      updated_at: new Date().toISOString(),
+    };
     const { error } = await supabase
       .from("orders")
-      .update({
-        status,
-        updated_at: new Date().toISOString(),
-      } as any)
-      .eq("id", orderId);
+      .update(updates)
+      .eq("id", order.id);
 
     if (error) return { success: false, error: error.message };
 
     // Append to timeline if user id is known
     if (agentUserId) {
-      await supabase.from("order_status_timeline").insert({
-        order_id: orderId,
-        status,
+      const timelineEntry: TablesInsert<"order_status_timeline"> = {
+        order_id: order.id,
+        status: nextStatus,
         user_id: agentUserId,
         notes: cancelReason || null,
-      } as any);
+      };
+      await supabase.from("order_status_timeline").insert(timelineEntry);
     }
 
     return { success: true };

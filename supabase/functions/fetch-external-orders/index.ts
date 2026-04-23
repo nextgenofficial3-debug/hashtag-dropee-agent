@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     const orders = Array.isArray(extData) ? extData : extData.orders || extData.data || [];
 
     if (action === "import" && orders.length > 0) {
-      // Import orders into delivery_orders using service role
+      // Import orders into the shared orders table using service role
       const adminClient = createClient(supabaseUrl, serviceKey);
 
       // Get agent info
@@ -102,20 +102,28 @@ Deno.serve(async (req) => {
         const deliveryAddr = order.delivery_address || order.deliveryAddress || order.address || order.to || "External Delivery";
         const instructions = order.special_instructions || order.instructions || order.notes || null;
         const fee = order.total_fee || order.fee || order.amount || order.total || 0;
+        const itemName = order.item_name || order.package_description || order.description || "External Order";
+        const itemQty = Number(order.quantity || 1) || 1;
+        const itemPrice = Number(fee) || 0;
 
         const { error: insertError } = await adminClient
-          .from("delivery_orders")
+          .from("orders")
           .insert({
-            order_code: orderCode,
+            hub_order_id: orderCode,
             customer_name: customerName,
             customer_phone: customerPhone,
             pickup_address: pickupAddr,
-            delivery_address: deliveryAddr,
+            customer_address: deliveryAddr,
             special_instructions: instructions,
+            items: [{ name: itemName, quantity: itemQty, price: itemPrice }],
             agent_id: agent.id,
             agent_user_id: agent.user_id,
-            status: "pending_assignment",
-            total_fee: Number(fee) || 0,
+            status: "accepted",
+            fee: Number(fee) || 0,
+            subtotal: Number(fee) || 0,
+            total: Number(fee) || 0,
+            payment_method: order.payment_method || "cash",
+            updated_at: new Date().toISOString(),
           });
 
         if (!insertError) {

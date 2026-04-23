@@ -8,7 +8,7 @@ export default function ReceiptPage() {
   const { orders } = useHubOrders();
   const navigate = useNavigate();
 
-  const order = orders.find((o) => o.hubOrderId === orderId);
+  const order = orders.find((o) => o.hubOrderId === orderId || o.id === orderId);
 
   if (!order) {
     return (

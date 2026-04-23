@@ -7,6 +7,7 @@ import { useHubOrders } from "@/hooks/useHubOrders";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import type { Tables, TablesUpdate } from "@/integrations/supabase/types";
 
 export default function CompleteDeliveryPage() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export default function CompleteDeliveryPage() {
   const [confirmed, setConfirmed] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [localOrder, setLocalOrder] = useState<any>(null);
+  const [localOrder, setLocalOrder] = useState<Tables<"orders"> | null>(null);
 
   const order = orders.find(
     (o) => o.status === "on_the_way" || o.status === "picked_up"
@@ -36,7 +37,7 @@ export default function CompleteDeliveryPage() {
       if (data) setLocalOrder(data);
     };
     fetchLocal();
-  }, [order?.id, agent]);
+  }, [order, agent]);
 
   const fees = {
     base: 0,
@@ -81,34 +82,23 @@ export default function CompleteDeliveryPage() {
 
       // Update shared orders table with proof photo + delivered status
       if (photoUrl) {
+        const updates: TablesUpdate<"orders"> = {
+          proof_photo_url: photoUrl,
+          updated_at: new Date().toISOString(),
+        };
         await supabase
           .from("orders")
-          .update({ proof_photo_url: photoUrl, status: "delivered", updated_at: new Date().toISOString() } as any)
-          .eq("id", order.id);
-      } else {
-        await supabase
-          .from("orders")
-          .update({ status: "delivered", updated_at: new Date().toISOString() } as any)
+          .update(updates)
           .eq("id", order.id);
       }
 
-      // Also update via updateStatus for timeline logging
+      // Update via shared service so timeline logging stays in sync
       const { success, error } = await updateStatus(order.id, "delivered");
       if (!success) {
         toast({ title: "Status update failed", description: error, variant: "destructive" });
         setSubmitting(false);
         return;
       }
-
-      // Record agent earnings
-      const { error: earnError } = await supabase.from("agent_earnings").insert({
-        agent_id: agent.user_id,
-        order_id: localOrder?.id || order.id,
-        amount: total,
-        points: 10,
-        status: "pending"
-      });
-      if (earnError) console.error("Earnings record failed:", earnError);
 
       setCompleted(true);
       setTimeout(() => navigate("/agent/dashboard"), 3000);
