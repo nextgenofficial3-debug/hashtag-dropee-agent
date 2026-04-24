@@ -21,7 +21,7 @@ CREATE POLICY "Enable read access for all users on app_settings"
 
 CREATE POLICY "Enable write access for admins on app_settings"
     ON public.app_settings FOR ALL
-    USING (auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin' OR role = 'superadmin'));
+    USING (auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin'));
 
 -- Insert default row if empty
 INSERT INTO public.app_settings (id)
@@ -48,7 +48,7 @@ CREATE POLICY "Enable read access for all users on policies"
 
 CREATE POLICY "Enable write access for admins on policies"
     ON public.policies FOR ALL
-    USING (auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin' OR role = 'superadmin'));
+    USING (auth.uid() IN (SELECT user_id FROM public.user_roles WHERE role = 'admin'));
 
 -- Trigger to update updated_at on policies
 CREATE OR REPLACE FUNCTION update_updated_at_column()
