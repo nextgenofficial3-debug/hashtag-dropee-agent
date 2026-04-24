@@ -13,20 +13,37 @@ export function useAgentAvailability() {
 
   // Fetch current availability on mount
   useEffect(() => {
-    if (!user || !agent) return;
+    if (!user || !agent) {
+      setLoading(false);
+      return;
+    }
 
     const fetchStatus = async () => {
-      const { data } = await supabase
+      setLoading(true);
+      const { data, error } = await supabase
         .from("agent_availability")
         .select("status")
         .eq("user_id", user.id)
         .maybeSingle();
 
+      if (error) {
+        console.error("[availability] failed to load status:", error.message);
+      }
+
       if (data) {
         const dbStatus = data.status as Status;
         setStatus(dbStatus);
-        // Sync to hub on load
         hubService.sendAvailability(dbStatus);
+      } else {
+        const { error: insertError } = await supabase.from("agent_availability").insert({
+          user_id: user.id,
+          agent_id: agent.id,
+          status: "offline",
+          last_seen: new Date().toISOString(),
+        });
+        if (insertError) {
+          console.error("[availability] failed to create row:", insertError.message);
+        }
       }
       setLoading(false);
     };
@@ -94,11 +111,12 @@ export function useAgentAvailability() {
           { onConflict: "agent_id" }
         );
 
-      if (!error) {
-        setStatus(newStatus);
-        // Push to hub immediately
-        hubService.sendAvailability(newStatus);
+      if (error) {
+        throw error;
       }
+
+      setStatus(newStatus);
+      hubService.sendAvailability(newStatus);
     },
     [user, agent]
   );

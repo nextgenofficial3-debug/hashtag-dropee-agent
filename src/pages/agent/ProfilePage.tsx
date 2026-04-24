@@ -18,7 +18,7 @@ const vehicles: { key: Vehicle; icon: React.ElementType; label: string }[] = [
 ];
 
 export default function ProfilePage() {
-  const { agent, user, signOut } = useAuth();
+  const { agent, user, refreshAgent, signOut } = useAuth();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -54,14 +54,14 @@ export default function ProfilePage() {
 
     setUploading(true);
     const ext = file.name.split(".").pop();
-    const filePath = `${agent.user_id}/avatar.${ext}`;
+    const filePath = `${agent.user_id}/avatar-${Date.now()}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
       .from("avatars")
-      .upload(filePath, file, { upsert: true });
+      .upload(filePath, file, { cacheControl: "31536000", contentType: file.type, upsert: false });
 
     if (uploadError) {
-      toast.error("Failed to upload image");
+      toast.error(`Failed to upload image: ${uploadError.message}`);
       setUploading(false);
       return;
     }
@@ -72,36 +72,51 @@ export default function ProfilePage() {
 
     const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("delivery_agents")
       .update({ avatar_url: publicUrl })
       .eq("user_id", agent.user_id);
 
+    if (updateError) {
+      toast.error(`Image uploaded, but profile update failed: ${updateError.message}`);
+      setUploading(false);
+      return;
+    }
+
     setAvatarUrl(publicUrl);
+    await refreshAgent();
     setUploading(false);
     toast.success("Profile photo updated!");
   };
 
   const handleSave = async () => {
-    if (!agent) return;
+    const activeAgent = agent || await refreshAgent();
+    if (!activeAgent) {
+      toast.error("Agent profile is not available yet. Ask admin to apply the agent database migration.");
+      return;
+    }
+    if (!name.trim()) {
+      toast.error("Full name is required");
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from("delivery_agents")
-      .upsert(
+      .update(
         { 
-          user_id: agent.user_id,
-          full_name: name, 
-          phone, 
-          email, 
+          full_name: name.trim(), 
+          phone: phone.trim() || null, 
+          email: email.trim() || user?.email || null, 
           vehicle,
           updated_at: new Date().toISOString()
-        },
-        { onConflict: 'user_id' }
-      );
+        }
+      )
+      .eq("user_id", activeAgent.user_id);
     setSaving(false);
     if (error) {
       toast.error("Failed to update profile: " + error.message);
     } else {
+      await refreshAgent();
       toast.success("Profile updated successfully!");
     }
   };

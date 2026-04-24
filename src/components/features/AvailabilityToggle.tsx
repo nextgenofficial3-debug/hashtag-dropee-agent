@@ -1,42 +1,30 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAgentAvailability } from "@/hooks/useAgentAvailability";
 
 interface AvailabilityToggleProps {
   userId: string;
 }
 
 export function AvailabilityToggle({ userId }: AvailabilityToggleProps) {
-  const [isOnline, setIsOnline] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { status, changeStatus, loading } = useAgentAvailability();
   const [saving, setSaving] = useState(false);
+  const isOnline = status !== "offline";
 
-  useEffect(() => {
+  const toggle = async () => {
     if (!userId) return;
-    supabase
-      .from("delivery_agents")
-      .select("is_online")
-      .eq("user_id", userId)
-      .single()
-      .then(({ data }) => {
-        setIsOnline(data?.is_online ?? false);
-        setLoading(false);
-      });
-  }, [userId]);
+    const nextStatus = isOnline ? "offline" : "online";
 
-    const toggle = async () => {
-    setSaving(true);
-    const newStatus = !isOnline;
-    const { error } = await supabase
-      .from("delivery_agents")
-      .update({ 
-        is_online: newStatus, 
-        status: newStatus ? 'online' : 'offline',
-        updated_at: new Date().toISOString() 
-      })
-      .eq("user_id", userId);
-
-    if (!error) setIsOnline(newStatus);
-    setSaving(false);
+    try {
+      setSaving(true);
+      await changeStatus(nextStatus);
+      toast.success(nextStatus === "online" ? "You are online" : "You are offline");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update availability");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return null;
@@ -55,7 +43,7 @@ export function AvailabilityToggle({ userId }: AvailabilityToggleProps) {
       `}
     >
       <span className={`w-2 h-2 rounded-full ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-muted-foreground"}`} />
-      {saving ? "Updating..." : isOnline ? "Online — Taking Orders" : "Offline"}
+      {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : isOnline ? "Online - Taking Orders" : "Offline"}
     </button>
   );
 }

@@ -25,6 +25,8 @@ interface AuthContextType {
   loading: boolean;
   isAgent: boolean;
   authError: string | null;
+  refreshAgent: () => Promise<AgentProfile | null>;
+  signUp: (email: string, password: string, fullName: string, agentCode: string) => Promise<{ error: Error | null }>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -39,23 +41,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const fetchAgentProfile = async (userId: string) => {
+  const buildDefaultAgentCode = (currentUser: User) => {
+    const metadataCode = currentUser.user_metadata?.agent_code;
+    if (typeof metadataCode === "string" && metadataCode.trim()) {
+      return metadataCode.trim().toUpperCase();
+    }
+    return `AG-${currentUser.id.slice(0, 8).toUpperCase()}`;
+  };
+
+  const fetchAgentProfile = async (currentUser: User) => {
     try {
       const { data, error } = await supabase
         .from("delivery_agents")
         .select("*")
-        .eq("user_id", userId)
-        .single();
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
 
       if (error) {
         console.error("Error fetching agent profile:", error);
         return null;
       }
-      return data as AgentProfile;
+
+      if (data) return data as AgentProfile;
+
+      const fallbackProfile = {
+        user_id: currentUser.id,
+        agent_code: buildDefaultAgentCode(currentUser),
+        full_name:
+          currentUser.user_metadata?.full_name ||
+          currentUser.user_metadata?.name ||
+          currentUser.email?.split("@")[0] ||
+          "Delivery Agent",
+        email: currentUser.email ?? null,
+        phone: currentUser.phone ?? currentUser.user_metadata?.phone ?? null,
+        vehicle: "bike",
+      };
+
+      const { data: created, error: createError } = await supabase
+        .from("delivery_agents")
+        .insert(fallbackProfile)
+        .select("*")
+        .single();
+
+      if (createError) {
+        console.error("Error creating agent profile:", createError);
+        setAuthError(`Agent profile missing and could not be created: ${createError.message}`);
+        return null;
+      }
+
+      return created as AgentProfile;
     } catch (err) {
       console.error("Exception in fetchAgentProfile:", err);
       return null;
     }
+  };
+
+  const refreshAgent = async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      setAgent(null);
+      return null;
+    }
+    const profile = await fetchAgentProfile(data.user);
+    setAgent(profile);
+    return profile;
   };
 
   const checkAgentRole = async (userId: string, email?: string): Promise<boolean> => {
@@ -98,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (mounted) {
               setIsAgent(hasAgentRole);
               if (hasAgentRole) {
-                const profile = await fetchAgentProfile(currentUser.id);
+                const profile = await fetchAgentProfile(currentUser);
                 if (mounted) setAgent(profile);
               } else {
                 setAgent(null);
@@ -158,6 +207,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signUp = async (email: string, password: string, fullName: string, agentCode: string) => {
+    try {
+      setAuthError(null);
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            full_name: fullName,
+            agent_code: agentCode,
+          },
+        },
+      });
+
+      if (error) return { error };
+
+      if (data.user) {
+        await supabase.from("delivery_agents").insert({
+          user_id: data.user.id,
+          agent_code: agentCode.trim().toUpperCase(),
+          full_name: fullName.trim(),
+          email: email.trim().toLowerCase(),
+          vehicle: "bike",
+        });
+
+        await supabase.from("user_roles").insert({
+          user_id: data.user.id,
+          role: "agent",
+        });
+      }
+
+      return { error: null };
+    } catch (error: any) {
+      return { error };
+    }
+  };
+
   const signOut = async () => {
     try {
       if ('caches' in window) {
@@ -171,7 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, agent, loading, isAgent, authError, signInWithGoogle, signOut }}>
+    <AuthContext.Provider value={{ user, session, agent, loading, isAgent, authError, refreshAgent, signUp, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );
